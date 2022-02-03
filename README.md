@@ -18,7 +18,12 @@ Install must be done from a git repository, because version information is extra
 Contents
 ========
 
-Yeah, this is awesome
+For using the package, three base classes must be subclassed:
+- `MeasurementBase`
+- `SensorRecordingBase`
+- `RecordBase`
+
+See docstrings for help.
 
 
 Misc. info

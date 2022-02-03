@@ -14,6 +14,11 @@ import oclock
 class SensorRecordingBase:
 
     def __init__(self, sensor, dt):
+        """Parameters:
+
+        sensor: object with a .name attribute
+        dt: default / initial time interval between data readings
+        """
 
         self.sensor = sensor
         self.name = self.sensor.name
@@ -70,6 +75,11 @@ class SensorRecordingBase:
 
 
 class MeasurementBase:
-    """Base class for measurements data."""
+    """Base class for measurements data.
+
+    Parameter
+    ---------
+    Name: sensor / recording name
+    """
     def __init__(self, name):
         self.name = name

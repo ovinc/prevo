@@ -19,6 +19,11 @@ class RecordBase:
         ----------
         recordings: dict {recording_name: recording_object}
         properties: dict of dicts of properties to control (see clyo.CLI)
+        path: directory in which data is recorded.
+        dt_check: time interval for checking queues for saving/plotting
+        ppty_kwargs: optional initial setting of properties.
+                     (example dt=10 for changing all time intervals to 10
+                      or dt_P=60 to change only time interval of recording 'P')
         """
         self.recordings = recordings
         self.properties = properties
