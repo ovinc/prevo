@@ -64,7 +64,7 @@ class RecordBase:
         """Save experimental metadata. To be defined in subclass"""
         pass
 
-    def data_graph(self):
+    def data_plot(self):
         """What to do with data when graph event is triggered"""
         pass
 
@@ -72,7 +72,7 @@ class RecordBase:
 
     def _set_property(self, ppty_cmd, recording_name, value):
         """Manage command from CLI to set a property accordingly."""
-        ppty = self.ppty_commands[ppty_cmd]
+        ppty = self.property_commands[ppty_cmd]
         recording = self.recordings[recording_name]
         exec(f'recording.{ppty} = {value}')
 
@@ -227,3 +227,21 @@ class RecordBase:
                 except Exception as error:
                     print(f'Data saving error for {measurement.name}: {error}')
             self.e_stop.wait(self.dt_check)   # periodic check whether there is data to save
+
+    # =========================== Real-time graph ============================
+
+    def data_graph(self):
+        """Manage real-time plotting of data during recording."""
+
+        while not self.e_stop.is_set():
+
+            if self.e_graph.is_set():
+                # no need to reset e_graph here, because data_plot is blocking in
+                # this version of the code (because of the plt.show() and
+                # FuncAnimation). If data_plot is changed, it might be useful to
+                # put back a e_graph.clear() here.
+
+                self.data_plot()
+
+            self.e_stop.wait(self.dt_check)  # check whether there is a graph request
+            # (NOT the refresh rate of the graph, which is set in data_plot)
