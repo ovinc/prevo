@@ -1,6 +1,6 @@
 """Base package to record data periodically from sensors"""
 
-from .sensors import SensorRecordingBase, MeasurementBase
+from .sensors import SensorRecordingBase, MeasurementBase, LiveMeasurement
 from .record import RecordBase
 
 from importlib_metadata import version

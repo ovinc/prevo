@@ -36,6 +36,7 @@ Module requirements
 
 (installed automatically by pip if necessary)
 
+- tzlocal < 3.0
 - oclock >= 1.2.2
 
 ### Homemade modules
