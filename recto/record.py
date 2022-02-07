@@ -181,7 +181,7 @@ class RecordBase:
 
         recording.timer.reset()
         failed_reading = False  # True temporarily if P or T reading fails
-        SensorReadingError = recording.get_sensor_exception_class()
+        SensorReadingError = recording.SensorError
 
         # Recording loop -----------------------------------------------------
 
@@ -205,6 +205,7 @@ class RecordBase:
                     failed_reading = False
 
                 measurement = recording.format_measurement(data)
+                recording.after_measurement()
 
                 # Store recorded data in a first queue for saving to file
                 self.q_save.put(measurement)
