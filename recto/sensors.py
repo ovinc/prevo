@@ -10,6 +10,8 @@ from abc import ABC, abstractmethod
 import oclock
 from tzlocal import get_localzone
 
+# Local imports
+from .fileio import ConfiguredCsvFile
 
 timezone = get_localzone()
 
@@ -140,57 +142,7 @@ class SensorRecordingBase(ABC):
         pass
 
 
-class CsvFileRecordingBase:
-    """Additional methods to SensorRecordingBase for saving to CSV files."""
-
-    def __init__(self, path='.', filename=None, csv_separator='\t'):
-        """Parameters:
-
-        - path: directory into which file is saved (str or path object)
-        - filename (str): file name, including extension
-        - csv_separator: character separating data in csv file
-        """
-        self.path = Path(path)
-        self.file = self.path / filename
-        self.csv_separator = csv_separator
-
-        self.column_names = ()  # Override in subclasses
-        self.column_formats = ()  # Override in subclasses
-
-    def init_file(self):
-        """How to init the file containing the data."""
-        # Line below allows the user to re-start the recording and append data
-        if not self.file.exists():
-            with open(self.file, 'w', encoding='utf8') as f:
-                f.write(f'{self.csv_separator.join(self.column_names)}\n')
-
-    def save_line(self, data):
-        """How to save data to file."""
-        # convert to list of str with the correct format
-        data_str = [f'{x:{fmt}}' for x, fmt in zip(data, self.column_formats)]
-
-        # make list into a single string (line) with tabs as separator
-        line_for_saving = self.csv_separator.join(data_str)
-
-        with open(self.file, 'a') as f:
-            f.write(line_for_saving)
-            f.write('\n')
-
-    def number_of_measurements(self):
-        """Count number of lines in data file, i.e. the number of measurements.
-
-        If the file only has a header, returns 0 (even with \\n at end of header)
-        """
-        with open(self.file, 'r') as f:
-            for i, line in enumerate(f):
-                pass
-            try:
-                return i
-            except UnboundLocalError:  # handles the case of an empty file
-                return 0
-
-
-class ConfiguredCsvSensorRecording(CsvFileRecordingBase, SensorRecordingBase):
+class ConfiguredCsvSensorRecording(ConfiguredCsvFile, SensorRecordingBase):
     """Additional methods to SensorRecordingBase for configured recordings."""
 
     def __init__(self, sensor, config, path='.'):
@@ -207,9 +159,7 @@ class ConfiguredCsvSensorRecording(CsvFileRecordingBase, SensorRecordingBase):
         SensorRecordingBase.__init__(self, sensor=sensor,
                                      dt=config['default dts'][name])
 
-        CsvFileRecordingBase.__init__(self, path=path,
-                                      filename=config['file names'][name],
-                                      csv_separator=config['csv separator'])
+        ConfiguredCsvFile.__init__(self, config=config, name=name, path=path)
 
         self.column_names = self.config['column names'][name]
         self.column_formats = self.config['column formats'][name]
