@@ -25,7 +25,7 @@ class NamesMgmt:
                 names.append(name)
         return names
 
-    def generate_recordings(self, mode, recording_class, path='.'):
+    def generate_recordings(self, mode, recording_class, path='.', **kwargs):
         """From a collection of sensors, generate corresponding recordings."""
         recordings = {}
         RecordingClass = recording_class
@@ -34,6 +34,6 @@ class NamesMgmt:
 
             Sensor = self.config['sensors'][name]
             sensor = Sensor()
-            recordings[name] = RecordingClass(sensor, path=path)
+            recordings[name] = RecordingClass(sensor, path=path, **kwargs)
 
         return recordings
