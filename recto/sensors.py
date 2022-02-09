@@ -44,21 +44,13 @@ class SensorBase(ABC):
         pass
 
     def read(self, *args, **kwargs):
-        """Read sensor and save data (time, etc.) in the data attribute.
-
-        If measurement fails, the data attribute stays None.
-        """
+        """Read sensor and throw SensorError if measurement fails."""
         try:
             data = self._read(*args, **kwargs)
         except self.exceptions:
-            data = None
-        finally:
-            # This is because sometimes the sensor sends None value instead
-            # of an exception when the sensor cannot be read.
-            if data is None:
-                raise SensorError(f'Impossible to read {self.name} sensor')
-            else:
-                return data
+            raise SensorError(f'Impossible to read {self.name} sensor')
+        else:
+            return data
 
 
 def create_sensor_dict(sensor_list):
