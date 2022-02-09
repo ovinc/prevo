@@ -123,6 +123,11 @@ class GraphBase:
 
         measurement is an object of Measurement() or SavedMeasurment() classes
         """
+        # The line below allows some sensors to avoid being plotted by reading
+        # None when called.
+        if measurement is None:
+            return
+
         measurement.format_for_plot()
 
         name = measurement.name
