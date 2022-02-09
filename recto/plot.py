@@ -148,7 +148,7 @@ class GraphBase:
             ax.xaxis.set_major_locator(self.locator[ax])
             ax.xaxis.set_major_formatter(self.formatter[ax])
 
-    def data_plot(self, e_graph, e_close, e_stop, q, timer=None):
+    def data_plot(self, e_graph, e_close, e_stop, q_plot, timer=None):
         """Threaded function to plot data from data received in a queue.
 
         INPUTS
@@ -157,7 +157,7 @@ class GraphBase:
         - e_graph is set when the graph is activated
         - e_close is set when the figure has been closed
         - e_stop is set when there is an external stop request.
-        - q is the name of the data queue from which data arrives
+        - q_plot: dict {name: queue} with sensor names and data queues
         - timer is an optional external timer that gets deactivated here if
         figure is closed
 
@@ -182,9 +182,10 @@ class GraphBase:
         def plot_new_data(i):
             """define what to do at each loop of the matplotlib animation."""
 
-            while q.qsize() > 0:
-                measurement = q.get()
-                self.plot(measurement)
+            for queue in q_plot.values():
+                while queue.qsize() > 0:
+                    measurement = queue.get()
+                    self.plot(measurement)
 
             if e_stop.is_set():
                 plt.close(self.fig)
@@ -245,7 +246,7 @@ class PeriodicDataReading:
         """
         self.timer = oclock.Timer(interval=dt_data, name='Data Update')
 
-        self.queue = Queue()
+        self.queues = {name: Queue() for name in self.names}
         self.e_graph = Event()
         self.e_stop = Event()
 
@@ -267,7 +268,7 @@ class PeriodicDataReading:
 
         # data_plot is inherited later from the Graph-like classes
         self.data_plot(e_graph=self.e_graph, e_close=self.e_stop, e_stop=self.e_stop,
-                       q=self.queue, timer=self.timer)
+                       q_plot=self.queues, timer=self.timer)
         # e_stop two times, because we want a figure closure event to also
         # trigger stopping of the recording process here.
 
@@ -301,7 +302,7 @@ class SensorGraphUpdated(GraphBase, PeriodicDataReading):
                 pass
             else:
                 measurement = self.format_live_measurement(name, data)
-                self.queue.put(measurement)
+                self.queues[name].put(measurement)
                 self.timer.checkpt()
 
 
@@ -330,6 +331,6 @@ class SavedGraphUpdated(SavedGraph, PeriodicDataReading):
             if n > n0:
                 measurement = self.load_saved_measurement(name, nrange=(n0 + 1, n))
                 if measurement.data is not None:
-                    self.queue.put(measurement)
+                    self.queues[name].put(measurement)
                     n0 = n
             self.timer.checkpt()

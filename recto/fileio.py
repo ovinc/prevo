@@ -63,17 +63,17 @@ class CsvFile:
             with open(self.file, 'w', encoding='utf8') as f:
                 f.write(f'{self.csv_separator.join(self.column_names)}\n')
 
-    def save_line(self, data):
-        """How to save data to file."""
-        # convert to list of str with the correct format
+    def _save_line(self, data, file):
+        """Save data to file when file is already open."""
         data_str = [f'{x:{fmt}}' for x, fmt in zip(data, self.column_formats)]
+        line_for_saving = self.csv_separator.join(data_str) + '\n'
+        file.write(line_for_saving)
 
-        # make list into a single string (line) with tabs as separator
-        line_for_saving = self.csv_separator.join(data_str)
-
-        with open(self.file, 'a') as f:
-            f.write(line_for_saving)
-            f.write('\n')
+    def save_line(self, data):
+        """Save data to file, when file has to be opened"""
+        # convert to list of str with the correct format
+        with open(self.file, 'a') as file:
+            self._save_line(data, file)
 
 
 class ConfiguredCsvFile(CsvFile):

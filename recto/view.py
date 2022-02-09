@@ -119,15 +119,15 @@ class CameraViewBase:
 
         return im,
 
-    def data_plot(self, e_graph, e_close, e_stop, q, timer=None):
-        """Threaded function to plot data from data received in a queue.
+    def data_plot(self, e_graph, e_close, e_stop, q_plot, timer=None):
+        """Threaded function to plot data from queues.
 
         INPUTS
         ------
         - e_graph is set when the graph is activated
         - e_close is set when the figure has been closed
         - e_stop is set when there is an external stop request.
-        - q is a dict of data queues from which images arrive
+        - q_plot is a dict of data queues from which images arrive
         - timer is an optional external timer that gets deactivated here if
         figure is closed
 
@@ -162,27 +162,25 @@ class CameraViewBase:
 
             to_be_animated = []
 
-            last_measurement = {name: None for name in self.names}
-
             # Empty queue to get last image fo each sensor -------------------
 
-            while q.qsize() > 0:
+            for name, queue in q_plot.items():
 
-                measurement = q.get()
-                name = measurement['name']
-                last_measurement[name] = measurement
+                last_measurement = None
+
+                while queue.qsize() > 0:
+
+                    last_measurement = queue.get()
 
             # Update displayed image if necessary ----------------------------
 
-            for name, measurement in last_measurement.items():
-
-                if measurement is not None:
+                if last_measurement is not None:
                     self.image_count[name] += 1
                     if self.image_count[name] == 1:
-                        self.set_pixel_range(measurement)
+                        self.set_pixel_range(last_measurement)
 
-                animated_objects = self.plot(measurement)
-                to_be_animated.extend(animated_objects)
+                    animated_objects = self.plot(last_measurement)
+                    to_be_animated.extend(animated_objects)
 
             return to_be_animated
 

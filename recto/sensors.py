@@ -2,7 +2,6 @@
 
 
 # Standard library imports
-from pathlib import Path
 from datetime import datetime
 from abc import ABC, abstractmethod
 
@@ -107,7 +106,7 @@ class SensorRecordingBase(ABC):
 
     @abstractmethod
     def after_measurement(self):
-        """Define what to do after measurement has been done formatted.
+        """Define what to do after measurement has been done and formatted.
 
         Acts on the recording object but does not return anything.
         """
@@ -119,8 +118,14 @@ class SensorRecordingBase(ABC):
         pass
 
     @abstractmethod
-    def save(self, measurement):
-        """How to write data of measurement to file"""
+    def save(self, measurement, file):
+        """How to write data of measurement to (already open) file"""
+        pass
+
+    @property
+    @abstractmethod
+    def file(self):
+        """File (path object) into which sensor data is saved"""
         pass
 
     # ======= Properties controlled by the CLI (in addition to timer) ========

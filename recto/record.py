@@ -38,8 +38,11 @@ class RecordBase:
         self.e_stop = Event()  # event set to stop recording when needed.
         self.e_graph = Event()  # event set to start plotting the data in real time
 
-        self.q_save = Queue()  # data is stored in a queue before being saved
-        self.q_plot = Queue()  # data queue for plotting when required
+        # Data is stored in a queue before being saved
+        self.q_save = {name: Queue() for name in self.recordings}
+
+        # Data queue for plotting when required
+        self.q_plot = {name: Queue() for name in self.recordings}
 
         self.events = {'graph': {'event': self.e_graph,
                                  'commands': ('g', 'graph')
@@ -124,46 +127,55 @@ class RecordBase:
     # =================== START RECORDING (MULTITHREAD) ======================
     # ------------------------------------------------------------------------
 
-    def start(self):
+    def add_data_reading_threads(self):
+        """Read data from each sensor and put in queue"""
+        for name in self.recordings:
+            self.threads.append(Thread(target=self.data_read, args=(name,)))
 
-        print(f'Recording started in folder {self.path.resolve()}')
+    def add_data_saving_threads(self):
+        """save data present in the data queues whenever they are not empty.
 
-        threads = []
+        The with statement allows the file to stay open during measurement.
+        """
+        for name, recording in self.recordings.items():
+            with open(recording.file, 'a') as file:
+                self.threads.append(Thread(target=self.data_save,
+                                           args=(name, file)))
 
-        # ========================== Define threads ==========================
-
-        # read data from each sensor and put in queue ------------------------
-
-        for recording in self.recordings.values():
-            threads.append(Thread(target=self.data_read, args=(recording,)))
-
-        # save data present in the data queue whenever it's not empty) -------
-
-        threads.append(Thread(target=self.data_save))
-
-        # interactive Command Line Interface ---------------------------------
-
+    def add_command_line_thread(self):
+        """Interactive command line interface"""
         command_input = CommandLineInterface(self.recordings,
                                              self.properties,
                                              self.events)
 
-        threads.append(Thread(target=command_input.run))
+        self.threads.append(Thread(target=command_input.run))
 
-        # any additional threads ---------------------------------------------
-
+    def add_other_threads(self):
+        """Add other threads for additional functions defined by user."""
         for func in self.additional_threads:
-            threads.append(Thread(target=func))
+            self.threads.append(Thread(target=func))
 
-        # ====================================================================
+    def start(self):
 
-        for thread in threads:
+        print(f'Recording started in folder {self.path.resolve()}')
+
+        # ========================== Define threads ==========================
+
+        self.threads = []
+
+        self.add_data_reading_threads()
+        self.add_data_saving_threads()
+        self.add_command_line_thread()
+        self.add_other_threads()
+
+        for thread in self.threads:
             thread.start()
 
         # real time graph (triggered by CLI, runs in main thread due to
         # matplotlib backend problems if not) --------------------------------
         self.data_graph()
 
-        for thread in threads:
+        for thread in self.threads:
             thread.join()
 
         print('Recording stopped.')
@@ -174,10 +186,14 @@ class RecordBase:
 
     # =========================== Data acquisition ===========================
 
-    def data_read(self, recording):
+    def data_read(self, name):
         """Read data from sensor and store it in data queues."""
 
         # Init ---------------------------------------------------------------
+
+        recording = self.recordings[name]
+        saving_queue = self.q_save[name]
+        plotting_queue = self.q_plot[name]
 
         recording.timer.reset()
         failed_reading = False  # True temporarily if P or T reading fails
@@ -208,11 +224,11 @@ class RecordBase:
                 recording.after_measurement()
 
                 # Store recorded data in a first queue for saving to file
-                self.q_save.put(measurement)
+                saving_queue.put(measurement)
 
                 # Store recorded data in another queue for plotting
                 if self.e_graph.is_set():
-                    self.q_plot.put(measurement)
+                    plotting_queue.put(measurement)
 
             # Below, this means that one does not try to acquire data right
             # away after a fail, but one waits for the usual time interval
@@ -221,15 +237,18 @@ class RecordBase:
 
     # ========================== Write data to file ==========================
 
-    def data_save(self):
+    def data_save(self, name, file):
         """Save data that is stored in a queue by data_read."""
 
+        recording = self.recordings[name]
+        saving_queue = self.q_save[name]
+
         while not self.e_stop.is_set():
-            while self.q_save.qsize() > 0:
-                measurement = self.q_save.get()
-                recording = self.recordings[measurement.name]
+
+            while saving_queue.qsize() > 0:
+                measurement = saving_queue.get()
                 try:
-                    recording.save(measurement)
+                    recording.save(measurement, file)
                 except Exception as error:
                     print(f'Data saving error for {measurement.name}: {error}')
             self.e_stop.wait(self.dt_check)   # periodic check whether there is data to save
