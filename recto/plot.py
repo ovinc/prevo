@@ -16,6 +16,8 @@ import oclock
 
 from tzlocal import get_localzone
 
+from .record import SensorError
+
 # The two lines below have been added following a console FutureWarning:
 # "Using an implicitly registered datetime converter for a matplotlib plotting
 # method. The converter was registered by pandas on import. Future versions of
@@ -284,7 +286,7 @@ class SensorGraphUpdated(GraphBase, PeriodicDataReading):
     # Methods that need to be defined in subclasses --------------------------
 
     def format_live_measurement(self, name, data):
-        """How to format the data given by self.read()"""
+        """How to format the data given by Sensor.read()"""
         pass
 
     # Other methods ----------------------------------------------------------
@@ -293,17 +295,18 @@ class SensorGraphUpdated(GraphBase, PeriodicDataReading):
         """Check if new data is read by sensor, and put it in data queue."""
         self.timer.reset()
         Sensor = self.config['sensors'][name]
-        sensor = Sensor()
 
-        while not self.e_stop.is_set():
-            try:
-                data = sensor.read(avg=1)
-            except self.config['sensor error']:
-                pass
-            else:
-                measurement = self.format_live_measurement(name, data)
-                self.queues[name].put(measurement)
-                self.timer.checkpt()
+        with Sensor() as sensor:
+
+            while not self.e_stop.is_set():
+                try:
+                    data = sensor.read()
+                except SensorError:
+                    pass
+                else:
+                    measurement = self.format_live_measurement(name, data)
+                    self.queues[name].put(measurement)
+                    self.timer.checkpt()
 
 
 class SavedGraphUpdated(SavedGraph, PeriodicDataReading):
