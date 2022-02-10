@@ -62,7 +62,8 @@ class CsvFile:
 
     def _write_columns(self, file):
         """How to init the file containing the data (when file already open)"""
-        file.write(f'{self.csv_separator.join(self.column_names)}\n')
+        columns_str = f'{self.csv_separator.join(self.column_names)}\n'
+        file.write(columns_str)
 
     def init_file(self):
         """How to init the file containing the data."""
@@ -79,7 +80,7 @@ class CsvFile:
     def write_line(self, data):
         """Save data to file, when file has to be opened"""
         # convert to list of str with the correct format
-        with open(self.file, 'a') as file:
+        with open(self.file, 'a', encoding='utf8') as file:
             self._write_line(data, file)
 
 
@@ -98,8 +99,8 @@ class ConfiguredCsvFile(CsvFile):
         """
         super().__init__(filename=config['file names'][name], path=path,
                          csv_separator=config['csv separator'],
-                         column_names=config['column names'],
-                         column_formats=config['column formats'])
+                         column_names=config['column names'][name],
+                         column_formats=config['column formats'][name])
 
 
 class RecordingToCsv:
@@ -129,7 +130,7 @@ class RecordingToCsv:
 
     def init_file(self, file):
         # Line below allows the user to re-start the recording and append data
-        if not self.file.exists():
+        if self.csv_file.number_of_lines() == 0:
             self.csv_file._write_columns(file)
 
     def measurement_to_data_iterable(self, measurement):
@@ -153,7 +154,7 @@ class RecordingToCsv:
         # Line below allows some recordings to not be saved if they give None
         if measurement is None:
             return
-        data_iterable = self.measurement_to_iterable(measurement)
+        data_iterable = self.measurement_to_data_iterable(measurement)
         self.csv_file._write_line(data_iterable, file)
 
 
@@ -184,4 +185,4 @@ class RecordingToCsvConfigured(RecordingToCsv):
                          column_names=config['column names'][name],
                          column_formats=config['column formats'][name],
                          path='.',
-                         csv_separator=config['csv separator'][name])
+                         csv_separator=config['csv separator'])

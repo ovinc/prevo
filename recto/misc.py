@@ -24,16 +24,3 @@ class NamesMgmt:
             if name in mode:
                 names.append(name)
         return names
-
-    def generate_recordings(self, mode, recording_class, path='.', **kwargs):
-        """From a collection of sensors, generate corresponding recordings."""
-        recordings = {}
-        RecordingClass = recording_class
-
-        for name in self.mode_to_names(mode):  # names of data sources to be recorded
-
-            Sensor = self.config['sensors'][name]
-            sensor = Sensor()
-            recordings[name] = RecordingClass(sensor, path=path, **kwargs)
-
-        return recordings

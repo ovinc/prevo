@@ -78,26 +78,15 @@ class RecordingBase(ABC):
         self.timer = oclock.Timer(interval=dt, name=self.name, warnings=True)
         self.continuous = continuous
 
-    # Compulsory attributes (properties) -------------------------------------
+        # Subclasses must define the following attributes upon init ----------
 
-    @property
-    @abstractmethod
-    def file(self):
-        """File (Path object) in which data is saved.
+        # File (Path object) in which data is saved. The file is opened at the
+        # beginning of the recording and closed in the end.
+        self.file = None
 
-        The file is opened at the beginning of the recording and closed in
-        the end.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def controlled_properties(self):
-        """Iterable of the name of properties of the object that the CLI controls.
-
-        e.g. 'timer.interval', 'averaging', etc.
-        """
-        pass
+        # Iterable of the name of properties of the object that the CLI controls.
+        # e.g. 'timer.interval', 'averaging', etc.
+        self.controlled_properties = []
 
     # Compulsory methods to subclass -----------------------------------------
 
@@ -172,7 +161,8 @@ class RecordBase:
         self.properties = properties
 
         self.property_commands = ClI._get_commands(self.properties)
-        self.object_properties = ClI._get_controlled_properties(self)
+        self.object_properties = ClI._get_controlled_properties(self,
+                                                                self.recordings)
 
         self.path = Path(path)
         self.path.mkdir(exist_ok=True)
@@ -272,10 +262,8 @@ class RecordBase:
 
         The with statement allows the file to stay open during measurement.
         """
-        for name, recording in self.recordings.items():
-            with open(recording.file, 'a') as file:
-                self.threads.append(Thread(target=self.data_save,
-                                           args=(name, file)))
+        for name in self.recordings:
+            self.threads.append(Thread(target=self.data_save, args=(name,)))
 
     def add_command_line_thread(self):
         """Interactive command line interface"""
@@ -343,7 +331,7 @@ class RecordBase:
             # before this point.
             # Note: (_set_property_base() does not do anything if the property
             # does not exist for the recording of interest)
-            for ppty_cmd, value in initial_ppty_settings:
+            for ppty_cmd, value in initial_ppty_settings.items():
                 if value is not None:
                     ClI._set_property_base(self, ppty_cmd, name,
                                            value, objects=self.recordings)
@@ -385,23 +373,27 @@ class RecordBase:
 
     # ========================== Write data to file ==========================
 
-    def data_save(self, name, file):
+    def data_save(self, name):
         """Save data that is stored in a queue by data_read."""
 
         recording = self.recordings[name]
         saving_queue = self.q_save[name]
 
-        recording.init_file(file)
+        with open(recording.file, 'a', encoding='utf8') as file:
 
-        while not self.e_stop.is_set():
+            recording.init_file(file)
 
-            while saving_queue.qsize() > 0:
-                measurement = saving_queue.get()
-                try:
-                    recording.save(measurement, file)
-                except Exception as error:
-                    print(f'Data saving error for {name}: {error}')
-            self.e_stop.wait(self.dt_check)   # periodic check whether there is data to save
+            while not self.e_stop.is_set():
+
+                while saving_queue.qsize() > 0:
+                    measurement = saving_queue.get()
+                    try:
+                        recording.save(measurement, file)
+                    except Exception as error:
+                        print(f'Data saving error for {name}: {error}')
+
+                # periodic check whether there is data to save
+                self.e_stop.wait(self.dt_check)
 
     # =========================== Real-time graph ============================
 
