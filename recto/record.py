@@ -179,7 +179,8 @@ class RecordBase:
 
         self.dt_check = dt_check
 
-        self.init_properties(ppty_kwargs)  # set loop timing according to kwargs
+        # Check if user inputs particular initial settings for recordings
+        self.initial_property_settings = self.init_properties(ppty_kwargs)
 
         self.e_stop = Event()  # event set to stop recording when needed.
         self.e_graph = Event()  # event set to start plotting the data in real time
@@ -227,6 +228,11 @@ class RecordBase:
     def init_properties(self, ppty_kwargs):
         """Check if user input contains specific properties and apply them."""
 
+        # Dict of dict managing initial settings passed by user
+        initial_ppty_settings = {name: {ppty_cmd: None
+                                        for ppty_cmd in self.property_commands}
+                                 for name in self.recordings}
+
         for ppty_cmd in self.property_commands:
 
             # If generic input (e.g. 'dt=10'), set all recordings to that value
@@ -234,9 +240,10 @@ class RecordBase:
             try:
                 value = ppty_kwargs[ppty_cmd]   # ppty_cmd is e.g. dt, avg etc.
             except KeyError:
-                values = {name: None for name in self.recordings}
+                pass
             else:
-                values = {name: value for name in self.recordings}
+                for name in self.recordings:
+                    initial_ppty_settings[name][value] = ppty_cmd
 
             # If specific input (e.g. dt_P=10), update recording to that value
 
@@ -247,14 +254,9 @@ class RecordBase:
                 except KeyError:
                     pass
                 else:
-                    values[recording_name] = value
+                    initial_ppty_settings[name][value] = ppty_cmd
 
-                # Finally, set property value to recording if necessary
-                # (_set_property_base() does not do anything if the property
-                # does not exist for the recording of interest)
-                if values[recording_name] is not None:
-                    ClI._set_property_base(self, ppty_cmd, recording_name,
-                                           value, objects=self.recordings)
+        return initial_ppty_settings
 
     # ------------------------------------------------------------------------
     # =================== START RECORDING (MULTITHREAD) ======================
@@ -322,9 +324,10 @@ class RecordBase:
         # Init ---------------------------------------------------------------
 
         recording = self.recordings[name]
-
+        initial_ppty_settings = self.initial_property_settings[name]
         saving_queue = self.q_save[name]
         plotting_queue = self.q_plot[name]
+
 
         recording.timer.reset()
         failed_reading = False  # True temporarily if P or T reading fails
@@ -332,6 +335,18 @@ class RecordBase:
         # Recording loop -----------------------------------------------------
 
         with recording.Sensor() as sensor:
+
+            recording.sensor = sensor
+
+            # Initial setting of properties is done here in case one of the
+            # properties acts on the sensor object, which is not defined
+            # before this point.
+            # Note: (_set_property_base() does not do anything if the property
+            # does not exist for the recording of interest)
+            for ppty_cmd, value in initial_ppty_settings:
+                if value is not None:
+                    ClI._set_property_base(self, ppty_cmd, name,
+                                           value, objects=self.recordings)
 
             while not self.e_stop.is_set():
 
