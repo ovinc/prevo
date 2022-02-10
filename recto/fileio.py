@@ -149,6 +149,10 @@ class RecordingToCsv:
         pass
 
     def save(self, measurement, file):
+        """Save to file"""
+        # Line below allows some recordings to not be saved if they give None
+        if measurement is None:
+            return
         data_iterable = self.measurement_to_iterable(measurement)
         self.csv_file._write_line(data_iterable, file)
 

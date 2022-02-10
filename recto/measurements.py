@@ -11,14 +11,6 @@ from tzlocal import get_localzone
 timezone = get_localzone()
 
 
-def create_sensor_dict(sensor_list):
-    """Create dict of correspondence of sensor name and sensor classes."""
-    sensors = {}
-    for Sensor in sensor_list:
-        sensors[Sensor.name] = Sensor
-    return sensors
-
-
 # Measurement classes ========================================================
 
 
