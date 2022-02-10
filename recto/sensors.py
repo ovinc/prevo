@@ -4,13 +4,14 @@
 # Standard library imports
 from datetime import datetime
 from abc import ABC, abstractmethod
+from sklearn.model_selection import cross_val_predict
 
 # Non standard imports
-import oclock
 from tzlocal import get_localzone
 
 # Local imports
-from .fileio import ConfiguredCsvFile
+from .fileio import CsvFile
+from .record import RecordingBase
 
 timezone = get_localzone()
 
@@ -63,7 +64,11 @@ def create_sensor_dict(sensor_list):
 # ======================== Sensor recordings classes =========================
 
 
-class SensorRecordingBase(ABC):
+class SensorRecordingBase(RecordingBase):
+    """Recording sensor objects. Needs to be subclassed.
+
+    See RecordingBase for required attributes / methods.
+    """
 
     def __init__(self, sensor, dt):
         """Parameters:
@@ -73,73 +78,50 @@ class SensorRecordingBase(ABC):
         """
         self.sensor = sensor
         self.SensorError = SensorError  # can be modified if necessary
-
         self.name = self.sensor.name
-        self.timer = oclock.Timer(interval=dt, name=self.sensor.name,
-                                  warnings=True)
 
-    def print_info_on_failed_reading(self, status):
-        """Displays relevant info when reading fails."""
-        t_str = datetime.now().isoformat(sep=' ', timespec='seconds')
-        if status == 'failed':
-            print(f'{self.name} reading failed ({t_str}). Retrying ...')
-        elif status == 'resumed':
-            print(f'{self.name} reading resumed ({t_str}).')
 
-    def on_stop(self):
-        """What happens when a stop event is requested in the CLI"""
-        self.timer.stop()
+class RecordingToCsv(RecordingBase):
+    """Recording data to CSV file."""
 
-    # ============ Methods that need to be defined in subclasses =============
+    def __init__(self, filename, column_names, column_formats=None,
+                 path='.', csv_separator='\t'):
+        """Init Recording to CSV object"""
 
-    @abstractmethod
-    def read(self):
-        """How to read the data. Normally, self.sensor.read()"""
-        pass
+        self.csv_file = CsvFile(filename=filename,
+                                path=path,
+                                csv_separator=csv_separator,
+                                column_names=column_names,
+                                column_formats=column_formats
+                                )
 
-    @abstractmethod
-    def format_measurement(self, data):
-        """How to format the data given by self.read().
+        self.file = self.csv_file.file
 
-        Returns a measurement object."""
-        pass
+    def init_file(self):
+        return self.csv_file.init_file()
 
-    @abstractmethod
-    def after_measurement(self):
-        """Define what to do after measurement has been done and formatted.
+    def measurement_to_data_iterable(self, measurement):
+        """How to convert measurement to an iterable of data.
 
-        Acts on the recording object but does not return anything.
+        Input
+        -----
+        Measurement object
+
+        Output
+        ------
+        Iterable of data to be saved in CSV file
+
+        The length of the iterable must be equal to that of column_names.
+        Needs to be defined in subclasses.
         """
         pass
 
-    @abstractmethod
-    def init_file(self):
-        """How to init the file containing the data."""
-        pass
-
-    @abstractmethod
     def save(self, measurement, file):
-        """How to write data of measurement to (already open) file"""
-        pass
-
-    @property
-    @abstractmethod
-    def file(self):
-        """File (path object) into which sensor data is saved"""
-        pass
-
-    # ======= Properties controlled by the CLI (in addition to timer) ========
-
-    @property
-    def misc_property(self):
-        pass
-
-    @misc_property.setter
-    def misc_property(self, value):
-        pass
+        data_iterable = self.measurement_to_iterable(measurement)
+        self.csv_file._save_line(data_iterable, file)
 
 
-class ConfiguredCsvSensorRecording(ConfiguredCsvFile, SensorRecordingBase):
+class ConfiguredCsvSensorRecording(SensorRecordingBase):
     """Additional methods to SensorRecordingBase for configured recordings."""
 
     def __init__(self, sensor, config, path='.'):
@@ -151,12 +133,11 @@ class ConfiguredCsvSensorRecording(ConfiguredCsvFile, SensorRecordingBase):
         - 'column formats'
         """
         self.config = config
-        name = sensor.name
 
         SensorRecordingBase.__init__(self, sensor=sensor,
                                      dt=config['default dts'][name])
 
-        ConfiguredCsvFile.__init__(self, config=config, name=name, path=path)
+        self.csv_file = ConfiguredCsvFile(config=config, name=name, path=path)
 
         self.column_names = self.config['column names'][name]
         self.column_formats = self.config['column formats'][name]

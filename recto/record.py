@@ -2,15 +2,112 @@
 
 
 # Standard library imports
+from abc import ABC, abstractmethod
+from datetime import datetime
 from pathlib import Path
 from threading import Event, Thread
 from queue import Queue
 
 # Non-standard imports
+import oclock
 from clyo import CommandLineInterface
 
 
+class RecordingBase(ABC):
+    """Base class for recording object used by RecordBase. To subclass"""
+
+    def __init__(self, dt):
+        """Parameters:
+
+        - dt: time interval between readings
+        - warnings: if True, print warnings when interval cannot be satisfied
+          etc. (see oclock.Timer warnings option)
+        """
+        self.timer = oclock.Timer(interval=dt,
+                                  name=self.name,
+                                  warnings=True)
+
+    # Compulsory attributes (properties) -------------------------------------
+
+    @property
+    @abstractmethod
+    def name(self):
+        """Name (identifier) of recording object"""
+        pass
+
+    @property
+    @abstractmethod
+    def file(self):
+        """File (Path object) in which data is saved.
+
+        The file is opened at the beginning of the recording and closed in
+        the end.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def SensorError(self):
+        """Exception class raised when sensor reading fails."""
+        pass
+
+    # Compulsory methods to subclass -----------------------------------------
+
+    @abstractmethod
+    def read(self):
+        """How to read the data. Normally, self.sensor.read()"""
+        pass
+
+    @abstractmethod
+    def format_measurement(self, data):
+        """How to format the data given by self.read().
+
+        Returns a measurement object (e.g. dict, value, custom class etc.)."""
+        pass
+
+    @abstractmethod
+    def init_file(self):
+        """How to init the file containing the data (columns etc.)."""
+        pass
+
+    @abstractmethod
+    def save(self, measurement, file_manager):
+        """Write data of measurement to (already open) file.
+
+        file_manager is the file object yielded by the open() context manager.
+        """
+        pass
+
+    # Optional methods to subclass -------------------------------------------
+
+    def after_measurement(self):
+        """Define what to do after measurement has been done and formatted.
+
+        Acts on the recording object but does not return anything.
+        (Optional)
+        """
+        pass
+
+    # General methods and attributes (can be subclassed if necessary) --------
+
+    def print_info_on_failed_reading(self, status):
+        """Displays relevant info when reading fails."""
+        t_str = datetime.now().isoformat(sep=' ', timespec='seconds')
+        if status == 'failed':
+            print(f'{self.name} reading failed ({t_str}). Retrying ...')
+        elif status == 'resumed':
+            print(f'{self.name} reading resumed ({t_str}).')
+
+    def on_stop(self):
+        """What happens when a stop event is requested in the CLI"""
+        self.timer.stop()
+
+
 class RecordBase:
+    """Asynchronous recording of several Recordings object.
+
+    Recordings objects are of type RecordingBase.
+    """
 
     def __init__(self, recordings, properties, path, dt_check, **ppty_kwargs):
         """Init base class for recording data
@@ -66,7 +163,7 @@ class RecordBase:
         """
         return CommandLineInterface._get_commands(input_data)
 
-    # ============= Methods and attributes that need subclassing =============
+    # =========== Optional methods and attributes for subclassing ============
 
     def save_metadata(self):
         """Save experimental metadata. To be defined in subclass"""
@@ -250,7 +347,7 @@ class RecordBase:
                 try:
                     recording.save(measurement, file)
                 except Exception as error:
-                    print(f'Data saving error for {measurement.name}: {error}')
+                    print(f'Data saving error for {name}: {error}')
             self.e_stop.wait(self.dt_check)   # periodic check whether there is data to save
 
     # =========================== Real-time graph ============================

@@ -8,8 +8,8 @@ import pandas as pd
 
 class CsvFile:
 
-    def __init__(self, filename, path='.', csv_separator='\t',
-                 column_names=(), column_formats=()):
+    def __init__(self, filename, column_names, column_formats=None,
+                 path='.', csv_separator='\t'):
         """Parameters:
 
         - file: file object (or str) to read.
@@ -21,7 +21,11 @@ class CsvFile:
         self.csv_separator = csv_separator
 
         self.column_names = column_names
-        self.column_formats = column_formats
+
+        if column_formats is None:
+            self.column_formats = ('',) * len(column_names)
+        else:
+            self.column_formats = column_formats
 
     def load(self, nrange=None):
         """Load data recorded in path, possibly with a range of indices (n1, n2).
