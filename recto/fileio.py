@@ -14,7 +14,7 @@ class CsvFile:
 
         - file: file object (or str) to read.
         - csv_separator: separator (str) used to separate data in file
-        - column_names, column_formats: only to use init_file() and save_line()
+        - column_names, column_formats: only to use init_file() and write_line()
         """
         self.path = Path(path)
         self.file = self.path / filename
@@ -60,40 +60,124 @@ class CsvFile:
             except UnboundLocalError:  # handles the case of an empty file
                 return 0
 
+    def _write_columns(self, file):
+        """How to init the file containing the data (when file already open)"""
+        file.write(f'{self.csv_separator.join(self.column_names)}\n')
+
     def init_file(self):
         """How to init the file containing the data."""
         # Line below allows the user to re-start the recording and append data
-        if not self.file.exists():
-            with open(self.file, 'w', encoding='utf8') as f:
-                f.write(f'{self.csv_separator.join(self.column_names)}\n')
+        with open(self.file, 'w', encoding='utf8') as file:
+            self._write_columns(file)
 
-    def _save_line(self, data, file):
+    def _write_line(self, data, file):
         """Save data to file when file is already open."""
         data_str = [f'{x:{fmt}}' for x, fmt in zip(data, self.column_formats)]
         line_for_saving = self.csv_separator.join(data_str) + '\n'
         file.write(line_for_saving)
 
-    def save_line(self, data):
+    def write_line(self, data):
         """Save data to file, when file has to be opened"""
         # convert to list of str with the correct format
         with open(self.file, 'a') as file:
-            self._save_line(data, file)
+            self._write_line(data, file)
 
 
 class ConfiguredCsvFile(CsvFile):
     """Same as CsvFile, but with keys (names) instead of files."""
 
-    def __init__(self, config, name, path='.'):
+    def __init__(self, name, config, path='.'):
         """Parameters:
+        - name: name of data to load, following names in config.py (e.g. 'P')
         - config: configuration dict, with the following keys:
             - 'file names': {name: file_name} dict
             - 'csv separator': str describing the csv
             - 'column name': iterable of column names
             - 'column formats': iterable of column formats
-        - name: name of data to load, following names in config.py (e.g. 'P')
         - path: directory in which data files are stored
         """
         super().__init__(filename=config['file names'][name], path=path,
                          csv_separator=config['csv separator'],
                          column_names=config['column names'],
                          column_formats=config['column formats'])
+
+
+class RecordingToCsv:
+    """Recording data to CSV file.
+
+    Provides the following attributes and methods for RecordBase:
+    - self.file
+    - self.init_file()
+    - self.save()
+
+    Requires definition of the following methods in subclasses:
+    - measurement_to_data_iterable()
+    """
+
+    def __init__(self, filename, column_names, column_formats=None,
+                 path='.', csv_separator='\t'):
+        """Init Recording to CSV object"""
+
+        self.csv_file = CsvFile(filename=filename,
+                                path=path,
+                                csv_separator=csv_separator,
+                                column_names=column_names,
+                                column_formats=column_formats
+                                )
+
+        self.file = self.csv_file.file
+
+    def init_file(self, file):
+        # Line below allows the user to re-start the recording and append data
+        if not self.file.exists():
+            self.csv_file._write_columns(file)
+
+    def measurement_to_data_iterable(self, measurement):
+        """How to convert measurement to an iterable of data.
+
+        Input
+        -----
+        Measurement object
+
+        Output
+        ------
+        Iterable of data to be saved in CSV file
+
+        The length of the iterable must be equal to that of column_names.
+        Needs to be defined in subclasses.
+        """
+        pass
+
+    def save(self, measurement, file):
+        data_iterable = self.measurement_to_iterable(measurement)
+        self.csv_file._write_line(data_iterable, file)
+
+
+class RecordingToCsvConfigured(RecordingToCsv):
+    """Recording data to CSV file, with configuration
+
+    Provides the following attributes and methods for RecordBase:
+    - self.file
+    - self.init_file()
+    - self.save()
+
+    Requires definition of the following methods in subclasses:
+    - measurement_to_data_iterable()
+    """
+
+    def __init__(self, name, config, path='.'):
+        """Parameters:
+
+        - name: name of data to load, following names in config.py (e.g. 'P')
+        - config: configuration dict, with the following keys:
+            - 'file names': {name: file_name} dict
+            - 'csv separator': str describing the csv
+            - 'column name': iterable of column names
+            - 'column formats': iterable of column formats
+        - path: directory in which data files are stored
+        """
+        super().__init__(filename=config['file names'][name],
+                         column_names=config['column names'][name],
+                         column_formats=config['column formats'][name],
+                         path='.',
+                         csv_separator=config['csv separator'][name])
