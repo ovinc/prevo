@@ -10,30 +10,75 @@ from queue import Queue
 
 # Non-standard imports
 import oclock
-from clyo import CommandLineInterface
+from clyo import CommandLineInterface as ClI
+
+
+
+# ========================== Sensor base classes =============================
+
+
+class SensorError(Exception):
+    pass
+
+
+class SensorBase(ABC):
+    """Abstract base class for sensor acquisition."""
+
+    def __init__(self):
+        # (optional) : specific sensor errors to catch, can be an Exception
+        # class or an iterable of exceptions; if not specified in subclass,
+        # any exception is catched.
+        self.exceptions = Exception
+
+    def __enter__(self):
+        """Context manager for sensor (enter). Optional."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, traceback):
+        """Context manager for sensor (exit). Optional."""
+        pass
+
+    @property
+    @abstractmethod
+    def name(self):
+        """Name of sensor, Must be a class attribute.
+        """
+        pass
+
+    @abstractmethod
+    def _read(self):
+        """Read sensor, method must be defined in sensor subclass."""
+        pass
+
+    def read(self):
+        """Read sensor and throw SensorError if measurement fails."""
+        try:
+            data = self._read()
+        except self.exceptions:
+            raise SensorError(f'Impossible to read {self.name} sensor')
+        else:
+            return data
+
+
+# ========================== Recording base class ============================
 
 
 class RecordingBase(ABC):
     """Base class for recording object used by RecordBase. To subclass"""
 
-    def __init__(self, dt):
+    def __init__(self, Sensor, dt, continuous=False):
         """Parameters:
 
+        - Sensor: subclass of SensorBase.
         - dt: time interval between readings
-        - warnings: if True, print warnings when interval cannot be satisfied
-          etc. (see oclock.Timer warnings option)
+        - continuous: if True, take data as fast as possible from sensor.
         """
-        self.timer = oclock.Timer(interval=dt,
-                                  name=self.name,
-                                  warnings=True)
+        self.Sensor = Sensor
+        self.name = Sensor.name
+        self.timer = oclock.Timer(interval=dt, name=self.name, warnings=True)
+        self.continuous = continuous
 
     # Compulsory attributes (properties) -------------------------------------
-
-    @property
-    @abstractmethod
-    def name(self):
-        """Name (identifier) of recording object"""
-        pass
 
     @property
     @abstractmethod
@@ -47,27 +92,28 @@ class RecordingBase(ABC):
 
     @property
     @abstractmethod
-    def SensorError(self):
-        """Exception class raised when sensor reading fails."""
+    def controlled_properties(self):
+        """Iterable of the name of properties of the object that the CLI controls.
+
+        e.g. 'timer.interval', 'averaging', etc.
+        """
         pass
 
     # Compulsory methods to subclass -----------------------------------------
 
     @abstractmethod
-    def read(self):
-        """How to read the data. Normally, self.sensor.read()"""
-        pass
-
-    @abstractmethod
     def format_measurement(self, data):
-        """How to format the data given by self.read().
+        """How to format the data given by self.Sensor.read().
 
         Returns a measurement object (e.g. dict, value, custom class etc.)."""
         pass
 
     @abstractmethod
-    def init_file(self):
-        """How to init the file containing the data (columns etc.)."""
+    def init_file(self, file_manager):
+        """How to init the (already opened) data file (columns etc.).
+
+        file_manager is the file object yielded by the open() context manager.
+        """
         pass
 
     @abstractmethod
@@ -124,12 +170,15 @@ class RecordBase:
         """
         self.recordings = recordings
         self.properties = properties
-        self.property_commands = self._get_commands(self.properties)
+
+        self.property_commands = ClI._get_commands(self.properties)
+        self.object_properties = ClI._get_controlled_properties(self)
 
         self.path = Path(path)
+        self.path.mkdir(exist_ok=True)
+
         self.dt_check = dt_check
 
-        self.init_files()  # specific files where data is saved
         self.init_properties(ppty_kwargs)  # set loop timing according to kwargs
 
         self.e_stop = Event()  # event set to stop recording when needed.
@@ -155,14 +204,6 @@ class RecordBase:
         # (to be defined in subclasses)
         self.additional_threads = []
 
-    @staticmethod
-    def _get_commands(input_data):
-        """Create dict of which command input modifies which property/event.
-
-        See clyo.CommandLineInterface._get_commands.
-        """
-        return CommandLineInterface._get_commands(input_data)
-
     # =========== Optional methods and attributes for subclassing ============
 
     def save_metadata(self):
@@ -177,19 +218,11 @@ class RecordBase:
 
     def _set_property(self, ppty_cmd, recording_name, value):
         """Manage command from CLI to set a property accordingly."""
-        ppty = self.property_commands[ppty_cmd]
-        recording = self.recordings[recording_name]
-        exec(f'recording.{ppty} = {value}')
+        return ClI
 
     # ------------------------------------------------------------------------
     # ============================= INIT METHODS =============================
     # ------------------------------------------------------------------------
-
-    def init_files(self):
-        """Init files in which to store data, add column titles if needed."""
-        self.path.mkdir(exist_ok=True)
-        for recording in self.recordings.values():
-            recording.init_file()
 
     def init_properties(self, ppty_kwargs):
         """Check if user input contains specific properties and apply them."""
@@ -217,8 +250,11 @@ class RecordBase:
                     values[recording_name] = value
 
                 # Finally, set property value to recording if necessary
+                # (_set_property_base() does not do anything if the property
+                # does not exist for the recording of interest)
                 if values[recording_name] is not None:
-                    self._set_property(ppty_cmd, recording_name, value)
+                    ClI._set_property_base(self, ppty_cmd, recording_name,
+                                           value, objects=self.recordings)
 
     # ------------------------------------------------------------------------
     # =================== START RECORDING (MULTITHREAD) ======================
@@ -241,10 +277,7 @@ class RecordBase:
 
     def add_command_line_thread(self):
         """Interactive command line interface"""
-        command_input = CommandLineInterface(self.recordings,
-                                             self.properties,
-                                             self.events)
-
+        command_input = ClI(self.recordings, self.properties, self.events)
         self.threads.append(Thread(target=command_input.run))
 
     def add_other_threads(self):
@@ -289,48 +322,51 @@ class RecordBase:
         # Init ---------------------------------------------------------------
 
         recording = self.recordings[name]
+
         saving_queue = self.q_save[name]
         plotting_queue = self.q_plot[name]
 
         recording.timer.reset()
         failed_reading = False  # True temporarily if P or T reading fails
-        SensorReadingError = recording.SensorError
 
         # Recording loop -----------------------------------------------------
 
-        while not self.e_stop.is_set():
+        with recording.Sensor() as sensor:
 
-            try:
-                data = recording.read()
+            while not self.e_stop.is_set():
 
-            # Measurement has failed .........................................
-            except SensorReadingError:
-                if not failed_reading:  # means it has not failed just before
-                    recording.print_info_on_failed_reading(recording.name,
-                                                           'failed')
-                failed_reading = True
+                try:
+                    data = sensor.read()
 
-            # Measurement is OK ..............................................
-            else:
-                if failed_reading:      # means it has failed just before
-                    recording.print_info_on_failed_reading(recording.name,
-                                                           'resumed')
-                    failed_reading = False
+                # Measurement has failed .........................................
+                except SensorError:
+                    if not failed_reading:  # means it has not failed just before
+                        recording.print_info_on_failed_reading(recording.name,
+                                                               'failed')
+                    failed_reading = True
 
-                measurement = recording.format_measurement(data)
-                recording.after_measurement()
+                # Measurement is OK ..............................................
+                else:
+                    if failed_reading:      # means it has failed just before
+                        recording.print_info_on_failed_reading(recording.name,
+                                                               'resumed')
+                        failed_reading = False
 
-                # Store recorded data in a first queue for saving to file
-                saving_queue.put(measurement)
+                    measurement = recording.format_measurement(data)
+                    recording.after_measurement()
 
-                # Store recorded data in another queue for plotting
-                if self.e_graph.is_set():
-                    plotting_queue.put(measurement)
+                    # Store recorded data in a first queue for saving to file
+                    saving_queue.put(measurement)
 
-            # Below, this means that one does not try to acquire data right
-            # away after a fail, but one waits for the usual time interval
-            finally:
-                recording.timer.checkpt()
+                    # Store recorded data in another queue for plotting
+                    if self.e_graph.is_set():
+                        plotting_queue.put(measurement)
+
+                # Below, this means that one does not try to acquire data right
+                # away after a fail, but one waits for the usual time interval
+                finally:
+                    if not recording.continuous:
+                        recording.timer.checkpt()
 
     # ========================== Write data to file ==========================
 
@@ -339,6 +375,8 @@ class RecordBase:
 
         recording = self.recordings[name]
         saving_queue = self.q_save[name]
+
+        recording.init_file(file)
 
         while not self.e_stop.is_set():
 
