@@ -385,10 +385,13 @@ class RecordBase:
         saving_queue = self.q_save[name]
 
         with open(recording.file, 'a', encoding='utf8') as file:
-
             recording.init_file(file)
 
-            while not self.e_stop.is_set():
+        while not self.e_stop.is_set():
+
+            # Open and close file at each cycle to be able to save periodically
+            # and for other users/programs to access the data simultaneously
+            with open(recording.file, 'a', encoding='utf8') as file:
 
                 while saving_queue.qsize() > 0:
                     measurement = saving_queue.get()

@@ -349,10 +349,11 @@ class PlotLiveSensors(PlotUpdatedData):
                            a format_for_plot() method.
                            (see measurements.py)
         - dt_data: how often (in s) sensors are probed"""
-        super().__init__(graph=graph, dt_data=dt_data)
         self.names = names
         self.Sensors = Sensors
         self.LiveMeasurement = LiveMeasurement
+
+        super().__init__(graph=graph, dt_data=dt_data)
 
     def get_data(self, name):
         """Check if new data is read by sensor, and put it in data queue."""
@@ -410,18 +411,15 @@ class PlotSavedDataUpdated(PlotUpdatedData, PlotSavedData):
                                             path=self.path)
 
         n0 = measurement.number_of_measurements()
-        print('initial n', n0)
 
         while not self.e_stop.is_set():
 
             n = measurement.number_of_measurements()
-            print(n)
 
             if n > n0:
                 measurement.load(nrange=(n0 + 1, n))
                 if measurement.data is not None:
                     self.queues[name].put(measurement)
                     n0 = n
-                    print('added to queue')
 
             self.timer.checkpt()
