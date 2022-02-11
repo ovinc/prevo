@@ -105,9 +105,12 @@ class LiveMeasurement(LiveMeasurementBase):
 class SavedMeasurementCsv(SavedMeasurementBase):
     """Class managing saved measurements to CSV files (with pandas)"""
 
-    def __init__(self, name, filename, path='.', csv_separator='\t'):
+    def __init__(self, name, filename, path='.',
+                 csv_separator='\t'):
 
-        super().__init__(name=name, filename=filename, path=path)
+        super().__init__(name=name,
+                         filename=filename,
+                         path=path)
 
         self.csv_file = CsvFile(filename=filename,
                                 path=path,
@@ -131,4 +134,4 @@ class SavedMeasurementCsv(SavedMeasurementBase):
         unix_time = self.data['time (unix)']
         utc_time = pd.to_datetime(unix_time, unit='s', utc=True)
         self.time = utc_time.dt.tz_convert(local_timezone)
-        self.values = self.data.iloc[:, 2:]     # remove t / dt columns
+        self.values = [column for _, column in self.data.iloc[:, 2:].items()]

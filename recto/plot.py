@@ -241,7 +241,7 @@ class NumericalGraph(GraphBase):
 
         # Below, it does not work if there is no value = before the FuncAnimation
         ani = FuncAnimation(self.fig, plot_new_data,
-                            interval=self.config['dt graph'] * 1000,
+                            interval=self.dt_graph * 1000,
                             cache_frame_data=False)
 
         plt.show(block=True)
@@ -282,6 +282,7 @@ class PlotSavedData:
             measurement = self.SavedMeasurement(name,
                                                 filename=self.file_names[name],
                                                 path=self.path)
+            measurement.load()
             self.graph.plot(measurement)
         self.graph.fig.tight_layout()
         plt.show(block=False)
@@ -337,17 +338,19 @@ class PlotUpdatedData:
 class PlotLiveSensors(PlotUpdatedData):
     """Create live graph by reading the sensors directly."""
 
-    def __init__(self, Sensors, graph, LiveMeasurement, dt_data=1):
+    def __init__(self, names, graph, Sensors, LiveMeasurement, dt_data=1):
         """Parameters:
 
-        - Sensors: dict{name: Sensor class}
+        - names: names of sensors/recordings to consider
         - graph: object of GraphBase class and subclasses
+        - Sensors: dict{name: Sensor class}
         - LiveMeasurement: Measurement class that manages live data formatting
                            must have (name, data) as arguments and must
                            a format_for_plot() method.
                            (see measurements.py)
         - dt_data: how often (in s) sensors are probed"""
         super().__init__(graph=graph, dt_data=dt_data)
+        self.names = names
         self.Sensors = Sensors
         self.LiveMeasurement = LiveMeasurement
 
@@ -407,15 +410,18 @@ class PlotSavedDataUpdated(PlotUpdatedData, PlotSavedData):
                                             path=self.path)
 
         n0 = measurement.number_of_measurements()
+        print('initial n', n0)
 
         while not self.e_stop.is_set():
 
-            n = self.number_of_saved_measurements(name)
+            n = measurement.number_of_measurements()
+            print(n)
 
             if n > n0:
                 measurement.load(nrange=(n0 + 1, n))
                 if measurement.data is not None:
                     self.queues[name].put(measurement)
                     n0 = n
+                    print('added to queue')
 
             self.timer.checkpt()
