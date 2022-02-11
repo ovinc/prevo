@@ -69,7 +69,7 @@ class CsvFile:
         columns_str = f'{self.csv_separator.join(self.column_names)}\n'
         file.write(columns_str)
 
-    def init_file(self):
+    def write_columns(self):
         """How to init the file containing the data."""
         # Line below allows the user to re-start the recording and append data
         with open(self.file, 'w', encoding='utf8') as file:
