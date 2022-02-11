@@ -1,31 +1,35 @@
 """General file input/output."""
 
-
+# Standart library
 from pathlib import Path
 
+# Nonstandard
 import pandas as pd
 
 
 class CsvFile:
 
-    def __init__(self, filename, column_names, column_formats=None,
+    def __init__(self, filename, column_names=None, column_formats=None,
                  path='.', csv_separator='\t'):
         """Parameters:
 
         - file: file object (or str) to read.
         - csv_separator: separator (str) used to separate data in file
-        - column_names, column_formats: only to use init_file() and write_line()
+        - column_names (optional, for saving data): iterable of names
+        - column_formats (optional, even if column_names is provided)
         """
         self.path = Path(path)
         self.file = self.path / filename
         self.csv_separator = csv_separator
 
-        self.column_names = column_names
+        if column_names is not None:
 
-        if column_formats is None:
-            self.column_formats = ('',) * len(column_names)
-        else:
-            self.column_formats = column_formats
+            self.column_names = column_names
+
+            if column_formats is None:
+                self.column_formats = ('',) * len(column_names)
+            else:
+                self.column_formats = column_formats
 
     def load(self, nrange=None):
         """Load data recorded in path, possibly with a range of indices (n1, n2).
@@ -84,25 +88,6 @@ class CsvFile:
             self._write_line(data, file)
 
 
-class ConfiguredCsvFile(CsvFile):
-    """Same as CsvFile, but with keys (names) instead of files."""
-
-    def __init__(self, name, config, path='.'):
-        """Parameters:
-        - name: name of data to load, following names in config.py (e.g. 'P')
-        - config: configuration dict, with the following keys:
-            - 'file names': {name: file_name} dict
-            - 'csv separator': str describing the csv
-            - 'column name': iterable of column names
-            - 'column formats': iterable of column formats
-        - path: directory in which data files are stored
-        """
-        super().__init__(filename=config['file names'][name], path=path,
-                         csv_separator=config['csv separator'],
-                         column_names=config['column names'][name],
-                         column_formats=config['column formats'][name])
-
-
 class RecordingToCsv:
     """Recording data to CSV file.
 
@@ -156,33 +141,3 @@ class RecordingToCsv:
             return
         data_iterable = self.measurement_to_data_iterable(measurement)
         self.csv_file._write_line(data_iterable, file)
-
-
-class RecordingToCsvConfigured(RecordingToCsv):
-    """Recording data to CSV file, with configuration
-
-    Provides the following attributes and methods for RecordBase:
-    - self.file
-    - self.init_file()
-    - self.save()
-
-    Requires definition of the following methods in subclasses:
-    - measurement_to_data_iterable()
-    """
-
-    def __init__(self, name, config, path='.'):
-        """Parameters:
-
-        - name: name of data to load, following names in config.py (e.g. 'P')
-        - config: configuration dict, with the following keys:
-            - 'file names': {name: file_name} dict
-            - 'csv separator': str describing the csv
-            - 'column name': iterable of column names
-            - 'column formats': iterable of column formats
-        - path: directory in which data files are stored
-        """
-        super().__init__(filename=config['file names'][name],
-                         column_names=config['column names'][name],
-                         column_formats=config['column formats'][name],
-                         path='.',
-                         csv_separator=config['csv separator'])

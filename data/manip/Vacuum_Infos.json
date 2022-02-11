@@ -1,0 +1,19 @@
+{
+    "time (utc)": "2021-03-23 09:07:21",
+    "code version": {
+        "vacuum": {
+            "hash": "b97047f73ddf326270186fcd178bb6e5f9ef10c7",
+            "status": "dirty"
+        },
+        "devices": {
+            "hash": "bf7d30a57cdfebf24b8317a0d872424208bbc317",
+            "status": "clean",
+            "tag": "v1.0.2"
+        },
+        "oclock": {
+            "hash": "ed36b2924016e8a58cd64ba2e9833c76f8f9be2d",
+            "status": "clean",
+            "tag": "v1.3.0"
+        }
+    }
+}

@@ -1,0 +1,3 @@
+recursive-include data *.json
+recursive-include data *.tsv
+recursive-include tests *.py

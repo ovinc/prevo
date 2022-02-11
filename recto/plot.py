@@ -1,12 +1,14 @@
 """Plot data from sensors (from live measurements or saved data)."""
 
 # Standard library imports
+from abc import ABC, abstractmethod
 from threading import Event, Thread
 from queue import Queue
 from pathlib import Path
 
 # Non standard imports
 import matplotlib
+
 matplotlib.use('Qt5Agg')
 
 import matplotlib.pyplot as plt
@@ -26,25 +28,63 @@ from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
 
 
-class GraphBase:
 
-    def __init__(self, names, config):
+class GraphBase(ABC):
+    """Base class for managing plotting of arbitrary measurement data"""
+
+    @abstractmethod
+    def plot(self, measurement):
+        """Plot individual measurement on existing graph."""
+        pass
+
+    @abstractmethod
+    def update_plot(self, e_graph, e_close, e_stop, q_plot, timer=None):
+        """Animation function to plot data received from queues.
+
+        INPUTS
+        ------
+        - e_graph is set when the graph is activated
+        - e_close is set when the figure has been closed
+        - e_stop is set when there is an external stop request.
+        - q_plot: dict {name: queue} with sensor names and data queues
+        - timer is an optional external timer that gets deactivated here if
+          figure is closed
+        """
+        pass
+
+
+class NumericalGraph(GraphBase):
+
+    def __init__(self, names, data_types, colors=None, dt_graph=1):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
         -----
-        names: iterable of names of recordings/sensors that will be plotted.
-        config: dict of configuration; must contain at least the keys:
-                    - 'colors': dict of colors with keys 'fig', 'ax',
-                       and the names of the recordings
-                    - 'data types': dict with the recording names as keys,
-                       and the corresponding data types as values.
-                    - 'dt graph': time interval to update the graph
-                      (only if data_plot is used)
+        - names: iterable of names of recordings/sensors that will be plotted.
+        - 'data types': dict with the recording names as keys, and the
+                        corresponding data types as values.
+        - 'colors': optional dict of colors with keys 'fig', 'ax', and the
+                    names of the recordings.
+        - 'dt graph': time interval to update the graph
+                      (only if update_plot is used)
         """
         self.names = names
-        self.config = config
+        self.data_types = data_types
+        self.colors = colors
+        self.dt_graph = dt_graph
+
         self.timezone = get_localzone()
+
+        self.fig, self.axs = self.create_axes()
+
+        self.format_graph()
+
+        # Create onclick callback to activate / deactivate autoscaling
+        self.cid = self.fig.canvas.mpl_connect('button_press_event',
+                                               self.onclick)
+
+    def create_axes(self):
+        """Generate figure/axes as a function of input data types"""
 
         if len(self.all_data_types) == 3:
             fig, axes = plt.subplots(1, 3, figsize=(14, 4))
@@ -57,40 +97,43 @@ class GraphBase:
             msg = f'Mode combination {self.all_data_types} not supported yet'
             raise Exception(msg)
 
-        # Set appearance of graph --------------------------------------------
-
-        fig.set_facecolor(config['colors']['fig'])
-
-        for ax in axes:  # Set appearance of ticks and background for all axes.
-            ax.set_facecolor(config['colors']['ax'])
-            ax.grid()
-
-        # Associate axes to types --------------------------------------------
-
         axs = {}
         for ax, datatype in zip(axes, self.all_data_types):
             ax.set_ylabel(datatype)
             axs[datatype] = ax
+
+        return fig, axs
+
+    def format_graph(self):
+        """Set colors, time formatting, etc."""
+
+        # Colors -------------------------------------------------------------
+
+        if self.colors is not None:
+
+            self.fig.set_facecolor(self.colors['fig'])
+
+            for ax in self.axs.values():
+                ax.set_facecolor(self.colors['ax'])
+                ax.grid()
+
+        else:
+
+            self.colors = {name: None for name in self.names}
 
         # Concise formatting of time -----------------------------------------
 
         self.locator = {}
         self.formatter = {}
 
-        for ax in axes:
+        for ax in self.axs.values():
             self.locator[ax] = mdates.AutoDateLocator(tz=self.timezone)
             self.formatter[ax] = mdates.ConciseDateFormatter(self.locator,
                                                              tz=self.timezone)
 
-        # Generate useful attributes -----------------------------------------
-
-        self.fig = fig
-        self.axs = axs
-
-        # Finalize figure and add mouse event callbacks ----------------------
+        # Finalize figure ----------------------------------------------------
 
         self.fig.tight_layout()
-        self.cid = self.fig.canvas.mpl_connect('button_press_event', self.onclick)
 
     # ============================ MISC. methods =============================
 
@@ -99,7 +142,7 @@ class GraphBase:
         """Return a set of all datatypes corresponding to the active names."""
         all_types = ()
         for name in self.names:
-            data_types = self.config['data types'][name]
+            data_types = self.data_types[name]
             all_types += data_types
         return set(all_types)
 
@@ -120,6 +163,8 @@ class GraphBase:
         else:
             pass
 
+    # ============================= Main methods =============================
+
     def plot(self, measurement):
         """Generic plot method that chooses axes depending on data type.
 
@@ -136,21 +181,21 @@ class GraphBase:
         values = measurement.values
         t = measurement.time
 
-        types = self.config['data types'][name]  # all data types for this specific signal
-        clrs = self.config['colors'][name]
+        dtypes = self.data_types[name]  # all data types for this specific signal
+        clrs = self.colors[name]
 
-        for value, dtype, clr in zip(values, types, clrs):
+        for value, dtype, clr in zip(values, dtypes, clrs):
             ax = self.axs[dtype]  # plot data in correct axis depending on type
             ax.plot(t, value, '.', color=clr)
 
         # Use Concise Date Formatting for minimal space used on screen by time
-        different_types = set(types)
+        different_types = set(dtypes)
         for dtype in different_types:
             ax = self.axs[dtype]
             ax.xaxis.set_major_locator(self.locator[ax])
             ax.xaxis.set_major_formatter(self.formatter[ax])
 
-    def data_plot(self, e_graph, e_close, e_stop, q_plot, timer=None):
+    def update_plot(self, e_graph, e_close, e_stop, q_plot, timer=None):
         """Threaded function to plot data from data received in a queue.
 
         INPUTS
@@ -164,12 +209,12 @@ class GraphBase:
         figure is closed
 
         Attention, if the figure is closed, the e_close event is triggered by
-        data_plot, so do not put in e_stop a threading event that is supposed
+        update_plot, so do not put in e_stop a threading event that is supposed
         to stay alive even if the figure gets closed. Rather, use the e_stop
         event.
 
-        Note: any request to data_plot when a graph is already active is ignored
-        because data_plot is blocking (due to the plt.show() after FuncAnimation).
+        Note: any request to update_plot when a graph is already active is ignored
+        because update_plot is blocking (due to the plt.show() after FuncAnimation).
         """
         def on_fig_close(event):
             """When figure is closed, set threading events accordingly."""
@@ -195,57 +240,70 @@ class GraphBase:
                 # by the on_fig_close() function
 
         # Below, it does not work if there is no value = before the FuncAnimation
-        dt = self.config['dt graph'] * 1000
-        ani = FuncAnimation(self.fig, plot_new_data, interval=dt,
+        ani = FuncAnimation(self.fig, plot_new_data,
+                            interval=self.config['dt graph'] * 1000,
                             cache_frame_data=False)
+
         plt.show(block=True)
 
         return ani
 
 
-class SavedGraph(GraphBase):
+# ============== Classes using Graph-like objects to plot data ===============
+
+
+# ------------------------------- Static graph -------------------------------
+
+
+class PlotSavedData:
     """Class to create graphs from saved data."""
 
-    def __init__(self, names, config, path='.'):
-        """Init Graph. See GraphBase help for names, config parameters.
+    def __init__(self, names, graph, SavedMeasurement, file_names, path='.'):
+        """Parameters:
 
-        Additional parameters compared to GraphBase:
-        - path: optional parameters to locate saved data (not necessary when
-          using only live data).
+        - names: names of sensors/recordings to consider
+        - graph: object of GraphBase class and subclasses
+        - SavedMeasurement: Measurement class that manages data loading
+                            must have (name, filename, path) as arguments
+                            and must define load() and format_for_plot()
+                            (see measurements.py)
+        - file_names: dict {name: filename (str)} of files containing data
+        - path: directory in which data is saved
         """
-        super().__init__(names=names, config=config)
+        self.names = names
+        self.graph = graph
+        self.SavedMeasurement = SavedMeasurement
+        self.file_names = file_names
         self.path = Path(path)
-
-    # Methods that need to be defined in subclasses --------------------------
-
-    def load_saved_measurement(self, name, nrange=None):
-        """Load saved data. nrange is the range in measurement numbers.
-
-        The output must be an object of a subclass of MeasurementBase.
-        nrange = (n1, n2) with both n1 included and first measurement is n=1.
-        nrange = None should load all the data
-        """
-        pass
-
-    # Other methods ----------------------------------------------------------
 
     def show(self):
         """Static plot of saved data"""
         for name in self.names:
-            measurement = self.load_saved_measurement(name)
-            self.plot(measurement)
-        self.fig.tight_layout()
+            measurement = self.SavedMeasurement(name,
+                                                filename=self.file_names[name],
+                                                path=self.path)
+            self.graph.plot(measurement)
+        self.graph.fig.tight_layout()
         plt.show(block=False)
 
 
-class PeriodicDataReading:
-    """Class to manage periodic reading of queues to plot data."""
+# ------------------------------ Updated graphs ------------------------------
 
-    def __init__(self, dt_data=1):
-        """Init class.
 
-        Parameter dt_data is how often (in s) the loop checks for new data.
+class PlotUpdatedData:
+    """Class to initiate and manage periodic reading of queues to plot data.
+
+    Is subclassed to define get_data(), which indicates how to get the data
+    (e.g. from live sensors, or from reading a file, etc.)
+    """
+
+    def __init__(self, graph, dt_data=1):
+        """Parameters:
+
+        - graph: object of GraphBase class and subclasses
+        - dt_data is how often (in s) the loop checks for (or gets) new data.
         """
+        self.graph = graph
         self.timer = oclock.Timer(interval=dt_data, name='Data Update')
 
         self.queues = {name: Queue() for name in self.names}
@@ -268,33 +326,35 @@ class PeriodicDataReading:
 
         self.e_graph.set()  # This is supposed to be set when graph is active.
 
-        # data_plot is inherited later from the Graph-like classes
-        self.data_plot(e_graph=self.e_graph, e_close=self.e_stop, e_stop=self.e_stop,
-                       q_plot=self.queues, timer=self.timer)
+        # update_plot is inherited later from the Graph-like classes
+        self.graph.update_plot(e_graph=self.e_graph, e_close=self.e_stop,
+                               e_stop=self.e_stop, q_plot=self.queues,
+                               timer=self.timer)
         # e_stop two times, because we want a figure closure event to also
         # trigger stopping of the recording process here.
 
 
-class SensorGraphUpdated(GraphBase, PeriodicDataReading):
+class PlotLiveSensors(PlotUpdatedData):
     """Create live graph by reading the sensors directly."""
 
-    def __init__(self, names, config, dt_data=1):
-        """Init Graph. See Parent classes for parameters."""
-        GraphBase.__init__(self, names=names, config=config)
-        PeriodicDataReading.__init__(self, dt_data=dt_data)
+    def __init__(self, Sensors, graph, LiveMeasurement, dt_data=1):
+        """Parameters:
 
-    # Methods that need to be defined in subclasses --------------------------
-
-    def format_live_measurement(self, name, data):
-        """How to format the data given by Sensor.read()"""
-        pass
-
-    # Other methods ----------------------------------------------------------
+        - Sensors: dict{name: Sensor class}
+        - graph: object of GraphBase class and subclasses
+        - LiveMeasurement: Measurement class that manages live data formatting
+                           must have (name, data) as arguments and must
+                           a format_for_plot() method.
+                           (see measurements.py)
+        - dt_data: how often (in s) sensors are probed"""
+        super().__init__(graph=graph, dt_data=dt_data)
+        self.Sensors = Sensors
+        self.LiveMeasurement = LiveMeasurement
 
     def get_data(self, name):
         """Check if new data is read by sensor, and put it in data queue."""
         self.timer.reset()
-        Sensor = self.config['sensors'][name]
+        Sensor = self.Sensors[name]
 
         with Sensor() as sensor:
 
@@ -304,36 +364,58 @@ class SensorGraphUpdated(GraphBase, PeriodicDataReading):
                 except SensorError:
                     pass
                 else:
-                    measurement = self.format_live_measurement(name, data)
+                    measurement = self.LiveMeasurement(name, data)
                     self.queues[name].put(measurement)
                     self.timer.checkpt()
 
 
-class SavedGraphUpdated(SavedGraph, PeriodicDataReading):
-    """Extends Saved Graph to be able to periodically read file to update."""
+class PlotSavedDataUpdated(PlotUpdatedData, PlotSavedData):
+    """Extends PlotSavedData to be able to periodically read file to update."""
 
-    def __init__(self, names, config, path='.', dt_data=1):
-        """Init Graph. See Parent classes for parameters."""
-        SavedGraph.__init__(self, names=names, config=config, path=path)
-        PeriodicDataReading.__init__(self, dt_data=dt_data)
+    def __init__(self, names, graph, SavedMeasurement, file_names,
+                 path='.', dt_data=1):
+        """Parameters:
 
-    # Methods that need to be defined in subclasses --------------------------
+        - names: names of sensors/recordings to consider
+        - graph: object of GraphBase class and subclasses
+        - SavedMeasurement: Measurement class that manages data loading
+                            must have (name, filename, path) as arguments and
+                            must define load(), format_for_plot() and
+                            number_of_measurements() methods
+                            (see measurements.py)
+        - file_names: dict {name: filename (str)} of files containing data
+        - path: directory in which data is saved
+        - dt_data: how often (in s) the files are checked for updates.
+        """
+        PlotSavedData.__init__(self,
+                               names=names,
+                               graph=graph,
+                               SavedMeasurement=SavedMeasurement,
+                               file_names=file_names,
+                               path=path)
 
-    def number_of_saved_measurements(self, name):
-        """Get number of measurements of a sensor already saved in a file."""
-        pass
-
-    # Other methods ----------------------------------------------------------
+        PlotUpdatedData.__init__(self,
+                                 graph=graph,
+                                 dt_data=dt_data)
 
     def get_data(self, name):
         """Check if new data is added to file, and put it in data queue."""
         self.timer.reset()
-        n0 = self.number_of_saved_measurements(name)
+
+        measurement = self.SavedMeasurement(name,
+                                            filename=self.file_names[name],
+                                            path=self.path)
+
+        n0 = measurement.number_of_measurements()
+
         while not self.e_stop.is_set():
+
             n = self.number_of_saved_measurements(name)
+
             if n > n0:
-                measurement = self.load_saved_measurement(name, nrange=(n0 + 1, n))
+                measurement.load(nrange=(n0 + 1, n))
                 if measurement.data is not None:
                     self.queues[name].put(measurement)
                     n0 = n
+
             self.timer.checkpt()
