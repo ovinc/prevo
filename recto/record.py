@@ -144,16 +144,20 @@ class RecordBase:
     Recordings objects are of type RecordingBase.
     """
 
-    def __init__(self, recordings, properties, path, dt_check, **ppty_kwargs):
+    def __init__(self, recordings, properties, path, dt_save=1, dt_request=1,
+                 **ppty_kwargs):
         """Init base class for recording data
 
         Parameters
         ----------
-        recordings: dict {recording_name: recording_object}
-        properties: dict of dicts of properties to control (see clyo.CLI)
-        path: directory in which data is recorded.
-        dt_check: time interval for checking queues for saving/plotting
-        ppty_kwargs: optional initial setting of properties.
+        - recordings: dict {recording_name: recording_object}
+        - properties: dict of dicts of properties to control (see clyo.CLI)
+        - path: directory in which data is recorded.
+        - dt_save: how often (in seconds) queues are checked and written to files
+                   (it is also how often files are open/closed)
+        - dt_request: time interval (in seconds) for checking user requests
+                      (e.g. graph pop-up)
+        - ppty_kwargs: optional initial setting of properties.
                      (example dt=10 for changing all time intervals to 10
                       or dt_P=60 to change only time interval of recording 'P')
         """
@@ -167,7 +171,8 @@ class RecordBase:
         self.path = Path(path)
         self.path.mkdir(exist_ok=True)
 
-        self.dt_check = dt_check
+        self.dt_save = dt_save
+        self.dt_request = dt_request
 
         # Check if user inputs particular initial settings for recordings
         self.initial_property_settings = self.init_properties(ppty_kwargs)
@@ -393,12 +398,12 @@ class RecordBase:
                         print(f'Data saving error for {name}: {error}')
 
                 # periodic check whether there is data to save
-                self.e_stop.wait(self.dt_check)
+                self.e_stop.wait(self.dt_save)
 
     # =========================== Real-time graph ============================
 
     def data_graph(self):
-        """Manage real-time plotting of data during recording."""
+        """Manage requests of real-time plotting of data during recording."""
 
         while not self.e_stop.is_set():
 
@@ -410,5 +415,4 @@ class RecordBase:
 
                 self.data_plot()
 
-            self.e_stop.wait(self.dt_check)  # check whether there is a graph request
-            # (NOT the refresh rate of the graph, which is set in data_plot)
+            self.e_stop.wait(self.dt_request)  # check whether there is a graph request
