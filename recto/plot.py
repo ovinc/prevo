@@ -200,7 +200,6 @@ class NumericalGraph(GraphBase):
 
         INPUTS
         ------
-        - g: object from the Graph class
         - e_graph is set when the graph is activated
         - e_close is set when the figure has been closed
         - e_stop is set when there is an external stop request.
@@ -244,7 +243,8 @@ class NumericalGraph(GraphBase):
                             interval=self.dt_graph * 1000,
                             cache_frame_data=False)
 
-        plt.show(block=True)
+        plt.show(block=True)  # block=True allow the animation to work even
+        # when matplotlib is in interactive mode (plt.ion()).
 
         return ani
 

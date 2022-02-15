@@ -66,16 +66,21 @@ class SensorBase(ABC):
 class RecordingBase(ABC):
     """Base class for recording object used by RecordBase. To subclass"""
 
-    def __init__(self, Sensor, dt, continuous=False):
+    def __init__(self, Sensor, dt, continuous=False, warnings=True, precise=False):
         """Parameters:
 
         - Sensor: subclass of SensorBase.
-        - dt: time interval between readings
+        - dt: time interval between readings.
         - continuous: if True, take data as fast as possible from sensor.
+        - warnings: if True, print warnings of Timer (e.g. loop too short).
+        - precise: if True, use precise timer in oclock (see oclock.Timer).
         """
         self.Sensor = Sensor
         self.name = Sensor.name
-        self.timer = oclock.Timer(interval=dt, name=self.name, warnings=True)
+        self.timer = oclock.Timer(interval=dt,
+                                  name=self.name,
+                                  warnings=warnings,
+                                  precise=precise)
         self.continuous = continuous
 
         # Subclasses must define the following attributes upon init ----------
@@ -421,6 +426,8 @@ class RecordBase:
 
                 # periodic check whether there is data to save
                 self.e_stop.wait(self.dt_save)
+
+        print(f'Data buffer saving finished for {name}')
 
     # =========================== Real-time graph ============================
 

@@ -36,20 +36,28 @@ def max_possible_pixel_value(img):
 
 class CameraViewBase:
 
-    def __init__(self, recordings, config):
+    def __init__(self, recordings, colors, dt_graph):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
         -----
-        recordings: dict of sensor recording objects {name: object}
-        config: dict of configuration; must contain at least the keys:
-                    - 'colors': dict of colors with keys 'fig', 'ax',
-                       and the names of the recordings
-                    - 'dt graph': time interval to update the graph
-                      (only if data_plot is used)
+        - 'recordings': dict of sensor recording objects {name: object}
+        - 'colors': optional dict of colors with keys 'fig', 'ax', and the
+                    names of the recordings.
+        - 'dt graph': time interval to update the graph
+                      (only if update_plot is used)
         """
+        self.recordings = recordings
         self.names = list(recordings)
-        self.config = config
+
+        self.colors = colors
+        self.dt_graph = dt_graph
+
+        self.fig, self.axs = self.create_axes()
+        self.format_graph()
+
+    def create_axes(self):
+        """Generate figure/axes as a function of input names"""
 
         if len(self.names) == 1:
             fig, ax = plt.subplots(1, 1, figsize=(10, 10))
@@ -59,17 +67,17 @@ class CameraViewBase:
         else:
             raise Exception(f'Combination {self.names} not supported yet')
 
-        # Set appearance of graphs -------------------------------------------
+        axs = {name: ax for name, ax in zip(self.names, axes)}
 
-        fig.set_facecolor(self.config['colors']['fig'])
+        return fig, axs
 
-        for ax in axes:  # Set appearance of ticks and background for all axes.
-            ax.set_facecolor(self.config['colors']['ax'])
+    def format_graph(self):
+        """Set colors, color scale, etc."""
 
-        # Generate useful attributes -----------------------------------------
+        self.fig.set_facecolor(self.colors['fig'])
 
-        self.fig = fig
-        self.axs = {name: ax for name, ax in zip(self.names, axes)}
+        for ax in self.axs.values():
+            ax.set_facecolor(self.colors['ax'])
 
         # Initiate image axes with black image -------------------------------
 
@@ -78,7 +86,7 @@ class CameraViewBase:
 
         for name, ax in self.axs.items():
 
-            camera = recordings[name].sensor.camera
+            camera = self.recordings[name].sensor.camera
             w, h = camera.width, camera.height
             black_image = np.zeros((h, w))
 
@@ -87,6 +95,8 @@ class CameraViewBase:
 
             self.imaxs[name] = im
             self.xlabs[name] = xlabel
+
+        # Finalize figure ----------------------------------------------------
 
         self.fig.tight_layout()
 
@@ -119,7 +129,7 @@ class CameraViewBase:
 
         return im,
 
-    def data_plot(self, e_graph, e_close, e_stop, q_plot, timer=None):
+    def update_plot(self, e_graph, e_close, e_stop, q_plot, timer=None):
         """Threaded function to plot data from queues.
 
         INPUTS
@@ -132,12 +142,12 @@ class CameraViewBase:
         figure is closed
 
         Attention, if the figure is closed, the e_close event is triggered by
-        data_plot, so do not put in e_stop a threading event that is supposed
+        update_plot, so do not put in e_stop a threading event that is supposed
         to stay alive even if the figure gets closed. Rather, use the e_stop
         event.
 
-        Note: any request to data_plot when a graph is already active is ignored
-        because data_plot is blocking (due to the plt.show() after FuncAnimation).
+        Note: any request to update_plot when a graph is already active is ignored
+        because update_plot is blocking (due to the plt.show() after FuncAnimation).
         """
         def on_fig_close(event):
             """When figure is closed, set threading events accordingly."""
@@ -165,11 +175,8 @@ class CameraViewBase:
             # Empty queue to get last image fo each sensor -------------------
 
             for name, queue in q_plot.items():
-
                 last_measurement = None
-
                 while queue.qsize() > 0:
-
                     last_measurement = queue.get()
 
             # Update displayed image if necessary ----------------------------
@@ -186,9 +193,11 @@ class CameraViewBase:
 
         # Below, it does not work if there is no value = before the FuncAnimation
         ani = FuncAnimation(self.fig, plot_new_data,
-                            interval=self.config['dt graph'] * 1000,
-                            blit=True, cache_frame_data=False)
-        plt.show(block=True)   # block=True allow the animation to work even
+                            interval=self.dt_graph * 1000,
+                            blit=True,
+                            cache_frame_data=False)
+
+        plt.show(block=True)  # block=True allow the animation to work even
         # when matplotlib is in interactive mode (plt.ion()).
 
         return ani
