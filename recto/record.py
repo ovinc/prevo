@@ -9,6 +9,7 @@ from threading import Event, Thread
 from queue import Queue
 
 # Non-standard imports
+from tqdm import tqdm
 import oclock
 from clivo import CommandLineInterface as ClI
 
@@ -148,6 +149,9 @@ class RecordBase:
 
     Recordings objects are of type RecordingBase.
     """
+
+    # Warnings when queue size goes over some limits
+    queue_warning_limits = 100, 1000, 10000
 
     def __init__(self, recordings, properties, path, dt_save=1, dt_request=1,
                  **ppty_kwargs):
@@ -345,7 +349,6 @@ class RecordBase:
         saving_queue = self.q_save[name]
         plotting_queue = self.q_plot[name]
 
-
         recording.timer.reset()
         failed_reading = False  # True temporarily if P or T reading fails
 
@@ -402,6 +405,28 @@ class RecordBase:
 
     # ========================== Write data to file ==========================
 
+    def _try_save(self, recording, q, file):
+        """Function to write data to file, used by data_save."""
+        measurement = q.get()
+        try:
+            recording.save(measurement, file)
+        except Exception as error:
+            print(f'Data saving error for {recording.name}: {error}')
+
+    def _check_queue_size(self, name, q, q_size_over):
+        """Check that queue does not go beyond specified limits"""
+        for qmax in self.queue_warning_limits:
+
+            if q.qsize() > qmax:
+                if not q_size_over[qmax]:
+                    print(f'\nWARNING: buffer size for {name} over {qmax} elements')
+                    q_size_over[qmax] = True
+
+            if q.qsize() <= qmax:
+                if q_size_over[qmax]:
+                    print(f'\nBuffer size now below {qmax} for {name}')
+                    q_size_over[qmax] = False
+
     def data_save(self, name):
         """Save data that is stored in a queue by data_read."""
 
@@ -411,6 +436,8 @@ class RecordBase:
         with open(recording.file, 'a', encoding='utf8') as file:
             recording.init_file(file)
 
+        queue_size_over = {s: False for s in self.queue_warning_limits}
+
         while not self.e_stop.is_set():
 
             # Open and close file at each cycle to be able to save periodically
@@ -418,14 +445,31 @@ class RecordBase:
             with open(recording.file, 'a', encoding='utf8') as file:
 
                 while saving_queue.qsize() > 0:
-                    measurement = saving_queue.get()
-                    try:
-                        recording.save(measurement, file)
-                    except Exception as error:
-                        print(f'Data saving error for {name}: {error}')
+
+                    self._try_save(recording=recording,
+                                   q=saving_queue,
+                                   file=file)
+
+                    self._check_queue_size(name=name,
+                                           q=saving_queue,
+                                           q_size_over=queue_size_over)
+
+                    if self.e_stop.is_set(): # Move to buffering waitbar
+                        break
+
+
 
                 # periodic check whether there is data to save
                 self.e_stop.wait(self.dt_save)
+
+        # Buffering waitbar --------------------------------------------------
+
+        print(f'Data buffer saving started for {name}')
+
+        with open(recording.file, 'a', encoding='utf8') as file:
+            buffer_size = saving_queue.qsize()
+            for _ in tqdm(range(buffer_size)):
+                self._try_save(recording, saving_queue, file)
 
         print(f'Data buffer saving finished for {name}')
 
