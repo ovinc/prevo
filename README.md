@@ -37,13 +37,8 @@ Module requirements
 (installed automatically by pip if necessary)
 
 - tzlocal < 3.0
-- oclock >= 1.2.2
-
-### Homemade modules
-
-(need to be installed manually)
-
-- clivo (command line interface management)
+- oclock >= 1.2.2 (timing tools)
+- clivo >= 0.2.0 (command line interface)
 
 
 Python requirements
