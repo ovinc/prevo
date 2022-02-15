@@ -2,6 +2,8 @@
 
 
 from threading import Thread
+import tkinter as tk
+import time
 
 # Non standard imports
 import matplotlib.pyplot as plt
@@ -39,6 +41,10 @@ def max_possible_pixel_value(img):
 
 class CameraViewCv:
     """View camera images with OpenCV"""
+
+    # Tkinter Appearance parameters
+    bgcolor = '#0b3c5d'
+    textcolor = '#f7f7f7'
 
     def __init__(self, names):
         """Parameters:
@@ -78,6 +84,36 @@ class CameraViewCv:
         e_graph.clear()
         if timer is not None:
             timer.stop()
+
+    # def gui(self, e_stop):
+    #     """Tkinter GUI to display camera info"""
+
+    #     self.root = tk.Tk()
+
+    #     self.root.geometry("150x75")  # Width x Height
+    #     self.root.title("Timer")
+    #     self.root.minsize(170, 40)
+    #     self.root.config(bg=self.bgcolor)
+
+    #     self.n = 0
+
+    #     self.display = tk.Label(self.root,
+    #                             font=('Helvetica', 30),
+    #                             bg=self.bgcolor,
+    #                             fg=self.textcolor,
+    #                             text=str(self.n)
+    #                             )
+
+    #     self.display.pack(expand=True)
+
+    #     def update_gui():
+    #         self.n += 1
+    #         self.display.config(text=str(self.n))
+    #         if not e_stop.is_set():
+    #             self.root.after(100, update_gui)  # update every 0.1 seconds
+
+    #     update_gui()
+    #     self.root.mainloop()
 
     def run_window(self, name, q, e_stop):
         """Run window for a single camera.

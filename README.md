@@ -43,7 +43,7 @@ Module requirements
 
 (need to be installed manually)
 
-- clyo (command line interface management)
+- clivo (command line interface management)
 
 
 Python requirements

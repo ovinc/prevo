@@ -10,7 +10,7 @@ from queue import Queue
 
 # Non-standard imports
 import oclock
-from clyo import CommandLineInterface as ClI
+from clivo import CommandLineInterface as ClI
 
 
 
@@ -156,7 +156,7 @@ class RecordBase:
         Parameters
         ----------
         - recordings: dict {recording_name: recording_object}
-        - properties: dict of dicts of properties to control (see clyo.CLI)
+        - properties: dict of dicts of properties to control (see clivo.CLI)
         - path: directory in which data is recorded.
         - dt_save: how often (in seconds) queues are checked and written to files
                    (it is also how often files are open/closed)
