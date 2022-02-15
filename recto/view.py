@@ -1,10 +1,13 @@
 """Similar to plot.py, but to view images instead of plotting numerical data."""
 
 
+from threading import Thread
+
 # Non standard imports
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import numpy as np
+import cv2
 
 
 # The two lines below have been added following a console FutureWarning:
@@ -34,7 +37,79 @@ def max_possible_pixel_value(img):
         return None
 
 
-class CameraViewBase:
+class CameraViewCv:
+    """View camera images with OpenCV"""
+
+    def __init__(self, names):
+        """Parameters:
+
+        - 'names': iterable of names of sensors.
+        """
+        self.names = names
+
+    def run(self, e_graph, e_close, e_stop, q_plot, timer=None):
+        """Show camera images concurrently.
+
+        Parameters
+        ----------
+        - e_graph is set when the graph is activated
+        - e_close is set when all windows have been closed
+        - e_stop is set when there is an external stop request.
+        - q_plot is a dict of data queues from which images arrive
+        - timer is an optional external timer that gets deactivated here if
+        figure is closed
+        """
+        threads = []
+
+        for name in self.names:
+            q = q_plot[name]
+            # self.run_window(name, q)
+            thread = Thread(target=self.run_window, args=(name, q, e_stop))
+            threads.append(thread)
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        cv2.destroyAllWindows()
+        e_close.set()
+        e_graph.clear()
+        if timer is not None:
+            timer.stop()
+
+    def run_window(self, name, q, e_stop):
+        """Run window for a single camera.
+
+        Parameters
+        ----------
+        - name: name of camera (sensor)
+        - q: queue of data for this camera
+        - e_stop: stopping event
+        """
+        cv2.namedWindow(name, cv2.WINDOW_NORMAL)
+
+        while cv2.getWindowProperty(name, cv2.WND_PROP_VISIBLE) > 0:
+
+            if e_stop.is_set():
+                break
+
+            # Empty queue to get last image fo each sensor -------------------
+
+            last_measurement = None
+
+            while q.qsize() > 0:
+                last_measurement = q.get()
+
+            if last_measurement is not None:
+                name = last_measurement['name']
+                img = last_measurement['image']
+                cv2.imshow(name, img)
+                cv2.waitKey(1)
+
+class CameraViewMpl:
+    """View camera images with Matplotlib"""
 
     def __init__(self, recordings, colors, dt_graph):
         """Initiate figures and axes for data plot as a function of asked types.

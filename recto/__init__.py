@@ -7,7 +7,7 @@ from .measurements import LiveMeasurement, SavedMeasurementCsv
 from .record import SensorBase, SensorError, RecordingBase, RecordBase
 from .plot import GraphBase, NumericalGraph
 from .plot import PlotLiveSensors, PlotSavedData, PlotSavedDataUpdated
-from .view import CameraViewBase, max_possible_pixel_value
+from .view import CameraViewCv, CameraViewMpl, max_possible_pixel_value
 
 from importlib_metadata import version
 
