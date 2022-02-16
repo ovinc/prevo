@@ -153,7 +153,7 @@ class RecordBase:
     # Warnings when queue size goes over some limits
     queue_warning_limits = 100, 1000, 10000
 
-    def __init__(self, recordings, properties, path, dt_save=1, dt_request=1,
+    def __init__(self, recordings, properties, path='.', dt_save=1, dt_request=1,
                  **ppty_kwargs):
         """Init base class for recording data
 
@@ -220,10 +220,6 @@ class RecordBase:
         pass
 
     # ============================= Misc methods =============================
-
-    def _set_property(self, ppty_cmd, recording_name, value):
-        """Manage command from CLI to set a property accordingly."""
-        return ClI
 
     @staticmethod
     def increment_filename(file):
@@ -454,10 +450,8 @@ class RecordBase:
                                            q=saving_queue,
                                            q_size_over=queue_size_over)
 
-                    if self.e_stop.is_set(): # Move to buffering waitbar
+                    if self.e_stop.is_set():  # Move to buffering waitbar
                         break
-
-
 
                 # periodic check whether there is data to save
                 self.e_stop.wait(self.dt_save)
