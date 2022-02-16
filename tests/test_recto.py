@@ -1,4 +1,4 @@
-"""Tests for the recto package.
+"""Tests for the prevo package.
 
 (VERY partial)
 """
@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 
 # local imports
-import recto
+import prevo
 
 
-datafolder = Path(recto.__file__).parent / '..' / 'data/manip'
+datafolder = Path(prevo.__file__).parent / '..' / 'data/manip'
 
 t_column, dt_column = 'time (unix)', 'dt (s)'
 
@@ -34,9 +34,9 @@ lines = {'P': (1616490450.506, 0.167, 2727.25),
          'T': (1616490515.961, 2.623, 26.8932, 25.4829),
          'B1': (1616490514.585, 0.091, 24.2640)}
 
-measP = recto.SavedMeasurementCsv('P', filenames['P'], datafolder)
-measT = recto.SavedMeasurementCsv('T', filenames['T'], path=datafolder)
-measB1 = recto.SavedMeasurementCsv(name='B1', filename=filenames['B1'],
+measP = prevo.SavedMeasurementCsv('P', filenames['P'], datafolder)
+measT = prevo.SavedMeasurementCsv('T', filenames['T'], path=datafolder)
+measB1 = prevo.SavedMeasurementCsv(name='B1', filename=filenames['B1'],
                               path=datafolder, csv_separator='\t')
 
 measurements = {'P': measP, 'T': measT, 'B1': measB1}

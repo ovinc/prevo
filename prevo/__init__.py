@@ -12,4 +12,4 @@ from .view import CameraViewCv, CameraViewMpl, max_possible_pixel_value
 from importlib_metadata import version
 
 __author__ = "Olivier Vincent"
-__version__ = version("recto")
+__version__ = version("prevo")

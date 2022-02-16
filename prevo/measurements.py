@@ -12,7 +12,10 @@ from pathlib import Path
 
 # Non standard imports
 from tzlocal import get_localzone
-import pandas as pd
+try:
+    import pandas as pd
+except ModuleNotFoundError:
+    pass
 
 # Local imports
 from .fileio import CsvFile

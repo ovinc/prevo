@@ -4,7 +4,10 @@
 from pathlib import Path
 
 # Nonstandard
-import pandas as pd
+try:
+    import pandas as pd
+except ModuleNotFoundError:
+    pass
 
 
 class CsvFile:

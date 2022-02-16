@@ -16,8 +16,11 @@ except ModuleNotFoundError:
 # "Using an implicitly registered datetime converter for a matplotlib plotting
 # method. The converter was registered by pandas on import. Future versions of
 # pandas will require you to explicitly register matplotlib converters."
-from pandas.plotting import register_matplotlib_converters
-register_matplotlib_converters()
+try:
+    from pandas.plotting import register_matplotlib_converters
+    register_matplotlib_converters()
+except ModuleNotFoundError:
+    pass
 
 
 def max_possible_pixel_value(img):

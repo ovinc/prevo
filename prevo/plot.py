@@ -16,17 +16,17 @@ import matplotlib.dates as mdates
 from matplotlib.animation import FuncAnimation
 import oclock
 
-from tzlocal import get_localzone
-
 from .record import SensorError
 
 # The two lines below have been added following a console FutureWarning:
 # "Using an implicitly registered datetime converter for a matplotlib plotting
 # method. The converter was registered by pandas on import. Future versions of
 # pandas will require you to explicitly register matplotlib converters."
-from pandas.plotting import register_matplotlib_converters
-register_matplotlib_converters()
-
+try:
+    from pandas.plotting import register_matplotlib_converters
+    register_matplotlib_converters()
+except ModuleNotFoundError:
+    pass
 
 
 class GraphBase(ABC):
