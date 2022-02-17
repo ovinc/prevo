@@ -172,7 +172,13 @@ class RecordBase:
     # Warnings when queue size goes over some limits
     queue_warning_limits = 100, 1000, 10000
 
-    def __init__(self, recordings, properties, path='.', dt_save=1, dt_request=1,
+    def __init__(self,
+                 recordings,
+                 properties,
+                 path='.',
+                 dt_save=1.9,
+                 dt_request=0.7,
+                 dt_check=1.3,
                  **ppty_kwargs):
         """Init base class for recording data
 
@@ -185,6 +191,7 @@ class RecordBase:
                    (it is also how often files are open/closed)
         - dt_request: time interval (in seconds) for checking user requests
                       (e.g. graph pop-up)
+        - dt_check: time interval (in seconds) for checking queue sizes.
         - ppty_kwargs: optional initial setting of properties.
                      (example dt=10 for changing all time intervals to 10
                       or dt_P=60 to change only time interval of recording 'P')
@@ -201,6 +208,7 @@ class RecordBase:
 
         self.dt_save = dt_save
         self.dt_request = dt_request
+        self.dt_check = dt_check
 
         # Check if user inputs particular initial settings for recordings
         self.initial_property_settings = self.init_properties(ppty_kwargs)
@@ -318,6 +326,10 @@ class RecordBase:
         command_input = ClI(self.recordings, self.properties, self.events)
         self.threads.append(Thread(target=command_input.run))
 
+    def add_queue_check_thread(self):
+        """Check size of queues periodically"""
+        self.threads.append(Thread(target=self.check_queue_sizes))
+
     def add_other_threads(self):
         """Add other threads for additional functions defined by user."""
         for func in self.additional_threads:
@@ -334,6 +346,7 @@ class RecordBase:
         self.add_data_reading_threads()
         self.add_data_saving_threads()
         self.add_command_line_thread()
+        self.add_queue_check_thread()
         self.add_other_threads()
 
         for thread in self.threads:
@@ -428,20 +441,6 @@ class RecordBase:
         except Exception as error:
             print(f'Data saving error for {recording.name}: {error}')
 
-    def _check_queue_size(self, name, q, q_size_over):
-        """Check that queue does not go beyond specified limits"""
-        for qmax in self.queue_warning_limits:
-
-            if q.qsize() > qmax:
-                if not q_size_over[qmax]:
-                    print(f'\nWARNING: buffer size for {name} over {qmax} elements')
-                    q_size_over[qmax] = True
-
-            if q.qsize() <= qmax:
-                if q_size_over[qmax]:
-                    print(f'\nBuffer size now below {qmax} for {name}')
-                    q_size_over[qmax] = False
-
     def data_save(self, name):
         """Save data that is stored in a queue by data_read."""
 
@@ -450,8 +449,6 @@ class RecordBase:
 
         with open(recording.file, 'a', encoding='utf8') as file:
             recording.init_file(file)
-
-        queue_size_over = {s: False for s in self.queue_warning_limits}
 
         while not self.e_stop.is_set():
 
@@ -464,10 +461,6 @@ class RecordBase:
                     self._try_save(recording=recording,
                                    q=saving_queue,
                                    file=file)
-
-                    self._check_queue_size(name=name,
-                                           q=saving_queue,
-                                           q_size_over=queue_size_over)
 
                     if self.e_stop.is_set():  # Move to buffering waitbar
                         break
@@ -502,3 +495,51 @@ class RecordBase:
                 self.data_plot()
 
             self.e_stop.wait(self.dt_request)  # check whether there is a graph request
+
+    # ========================== Check queue sizes ===========================
+
+    def _init_queue_size_info(self):
+        """Create dict indicating that no queue limit is over among limits"""
+        queue_size_over = {}
+        for name in self.recordings:
+            queue_size_over[name] = {limit: False
+                                     for limit in self.queue_warning_limits}
+        return queue_size_over
+
+    def _check_queue_size(self, name, q, q_size_over, q_type):
+        """Check that queue does not go beyond specified limits"""
+        for qmax in self.queue_warning_limits:
+
+            if q.qsize() > qmax:
+                if not q_size_over[qmax]:
+                    print(f'\nWARNING: {q_type} buffer size for {name} over {qmax} elements')
+                    q_size_over[qmax] = True
+
+            if q.qsize() <= qmax:
+                if q_size_over[qmax]:
+                    print(f'\n{q_type} buffer size now below {qmax} for {name}')
+                    q_size_over[qmax] = False
+
+    def check_queue_sizes(self):
+        """Periodically verify that queue sizes are not over limits"""
+
+        self.q_save_size_over = self._init_queue_size_info()
+        self.q_plot_size_over = self._init_queue_size_info()
+
+        while not self.e_stop.is_set():
+
+            for name in self.recordings:
+
+                self._check_queue_size(name=name,
+                                       q=self.q_save[name],
+                                       q_size_over=self.q_save_size_over[name],
+                                       q_type='Saving')
+
+                if self.e_graph.is_set():
+
+                    self._check_queue_size(name=name,
+                                           q=self.q_save[name],
+                                           q_size_over=self.q_save_size_over[name],
+                                           q_type='Plotting')
+
+            self.e_stop.wait(self.dt_check)
