@@ -25,7 +25,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 from threading import Event, Thread
-from queue import Queue
+from queue import Queue, Empty
 
 # Non-standard imports
 from tqdm import tqdm
@@ -433,9 +433,8 @@ class RecordBase:
 
     # ========================== Write data to file ==========================
 
-    def _try_save(self, recording, q, file):
+    def _try_save(self,  measurement, recording, file):
         """Function to write data to file, used by data_save."""
-        measurement = q.get()
         try:
             recording.save(measurement, file)
         except Exception as error:
@@ -446,6 +445,7 @@ class RecordBase:
 
         recording = self.recordings[name]
         saving_queue = self.q_save[name]
+        saving_timer = oclock.Timer(interval=self.dt_save)
 
         with open(recording.file, 'a', encoding='utf8') as file:
             recording.init_file(file)
@@ -456,26 +456,40 @@ class RecordBase:
             # and for other users/programs to access the data simultaneously
             with open(recording.file, 'a', encoding='utf8') as file:
 
-                while saving_queue.qsize() > 0:
+                while not saving_timer.interval_exceeded:
 
-                    self._try_save(recording=recording,
-                                   q=saving_queue,
-                                   file=file)
+                    try:
+                        measurement = saving_queue.get(timeout=self.dt_save)
+                    except Empty:
+                        pass
+                    else:
+                        self._try_save(measurement, recording, file)
 
                     if self.e_stop.is_set():  # Move to buffering waitbar
                         break
 
                 # periodic check whether there is data to save
-                self.e_stop.wait(self.dt_save)
+                saving_timer.checkpt()
 
         # Buffering waitbar --------------------------------------------------
 
         print(f'Data buffer saving started for {name}')
 
-        with open(recording.file, 'a', encoding='utf8') as file:
-            buffer_size = saving_queue.qsize()
-            for _ in tqdm(range(buffer_size)):
-                self._try_save(recording, saving_queue, file)
+        # The nested statements below, similarly to above, ensure that
+        # recording.file is opened and close regularly to avoid loosing
+        # too much data if there is an error.
+
+        with tqdm(total=saving_queue.qsize()) as pbar:
+            while True:
+                try:
+                    with open(recording.file, 'a', encoding='utf8') as file:
+                        saving_timer.reset()
+                        while not saving_timer.interval_exceeded:
+                            measurement = saving_queue.get(timeout=self.dt_save)
+                            self._try_save(measurement, recording, file)
+                            pbar.update()
+                except Empty:
+                    break
 
         print(f'Data buffer saving finished for {name}')
 
