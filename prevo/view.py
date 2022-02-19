@@ -131,6 +131,7 @@ class CameraViewCv:
                 cv2.imshow(name, img)
                 cv2.waitKey(1)
 
+
 class CameraViewMpl:
     """View camera images with Matplotlib"""
 
