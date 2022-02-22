@@ -84,7 +84,6 @@ class ViewerBase(ABC):
         # This is e.g. to stop camera readings in live() when window is closed.
         # In record() situations, this needs to be subclassed to avoid stopping
         # the recording when closing the window.
-        print('STOP event SET')
         self.e_stop.set()
 
 
