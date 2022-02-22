@@ -169,6 +169,7 @@ Module requirements
 - tzlocal < 3.0
 - oclock >= 1.2.2 (timing tools)
 - clivo >= 0.2.0 (command line interface)
+- matplotlib >= 3.1 (due to `cache_frame_data` option in `FuncAnimation`)
 - pandas (optional, for csv loading methods)
 - opencv-python (optional, for specific camera viewers)
 
