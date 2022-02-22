@@ -26,7 +26,7 @@ A minimal example is provided below, to record pressure and temperature asynchro
 1) **Define the sensors**
 
     ```python
-    from prevo import SensorBase
+    from prevo.record import SensorBase
 
 
     class TemperatureSensor(SensorBase):
@@ -54,7 +54,7 @@ A minimal example is provided below, to record pressure and temperature asynchro
     Note: subclassing can help significantly reduce the code below.
 
     ```python
-    from prevo import RecordingBase
+    from prevo.record import RecordingBase
 
 
     class RecordingT(RecordingBase):
@@ -113,7 +113,7 @@ A minimal example is provided below, to record pressure and temperature asynchro
 1) **Define and start asynchronous recording**
 
     ```python
-    from prevo import RecordBase
+    from prevo.record import RecordBase
 
 
     class Record(RecordBase):
@@ -148,9 +148,10 @@ Additional tools
 
 Some elements are also provided to simplify and/or extend the classes above:
 
-- read / save with CSV files (see `prevo.fileio`)
+- read / save with CSV files (see `prevo.csv`)
 - plot numerical data in real time (see `prevo.plot`)
-- live view images from camera-like sensors (see `prevo.view`)
+- live view images from camera-like sensors (see `prevo.viewers`)
+- some tools to format measurements for `Record`-like classes (see `prevo.measurements`)
 
 See docstrings for more help.
 
