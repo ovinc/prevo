@@ -170,6 +170,7 @@ Module requirements
 - oclock >= 1.2.2 (timing tools)
 - clivo >= 0.2.0 (command line interface)
 - pandas (optional, for csv loading methods)
+- opencv-python (optional, for specific camera viewers)
 
 
 Python requirements

@@ -1,4 +1,4 @@
-"""General file input/output."""
+"""General file input/output with csv files"""
 
 # ----------------------------- License information --------------------------
 

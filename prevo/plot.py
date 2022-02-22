@@ -27,6 +27,7 @@ from queue import Queue
 from pathlib import Path
 
 # Non standard imports
+import tzlocal
 import matplotlib
 
 matplotlib.use('Qt5Agg')
@@ -93,7 +94,7 @@ class NumericalGraph(GraphBase):
         self.colors = colors
         self.dt_graph = dt_graph
 
-        self.timezone = get_localzone()
+        self.timezone = tzlocal.get_localzone()
 
         self.fig, self.axs = self.create_axes()
 

@@ -37,7 +37,7 @@ except ModuleNotFoundError:
     pass
 
 # Local imports
-from .fileio import CsvFile
+from .csv import CsvFile
 
 
 # Misc =======================================================================
