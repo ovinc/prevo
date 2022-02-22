@@ -303,8 +303,6 @@ class RecordBase:
                 else:
                     initial_ppty_settings[name][ppty_cmd] = value
 
-        print(initial_ppty_settings)
-
         return initial_ppty_settings
 
     # ------------------------------------------------------------------------
