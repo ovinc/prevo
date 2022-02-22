@@ -290,7 +290,7 @@ class RecordBase:
                 pass
             else:
                 for name in self.recordings:
-                    initial_ppty_settings[name][value] = ppty_cmd
+                    initial_ppty_settings[name][ppty_cmd] = value
 
             # If specific input (e.g. dt_P=10), update recording to that value
 
@@ -301,7 +301,9 @@ class RecordBase:
                 except KeyError:
                     pass
                 else:
-                    initial_ppty_settings[name][value] = ppty_cmd
+                    initial_ppty_settings[name][ppty_cmd] = value
+
+        print(initial_ppty_settings)
 
         return initial_ppty_settings
 
