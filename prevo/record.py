@@ -26,6 +26,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import Event, Thread
 from queue import Queue, Empty
+from traceback import print_exc
 
 # Non-standard imports
 from tqdm import tqdm
@@ -321,11 +322,6 @@ class RecordBase:
         for name in self.recordings:
             self.threads.append(Thread(target=self.data_save, args=(name,)))
 
-    def add_command_line_thread(self):
-        """Interactive command line interface"""
-        command_input = ClI(self.recordings, self.properties, self.events)
-        self.threads.append(Thread(target=command_input.run))
-
     def add_queue_check_thread(self):
         """Check size of queues periodically"""
         self.threads.append(Thread(target=self.check_queue_sizes))
@@ -339,27 +335,52 @@ class RecordBase:
 
         print(f'Recording started in folder {self.path.resolve()}')
 
-        # ========================== Define threads ==========================
+        error_occurred = False
 
-        self.threads = []
+        try:
 
-        self.add_data_reading_threads()
-        self.add_data_saving_threads()
-        self.add_command_line_thread()
-        self.add_queue_check_thread()
-        self.add_other_threads()
+            self.threads = []
 
-        for thread in self.threads:
-            thread.start()
+            self.add_data_reading_threads()
+            self.add_data_saving_threads()
+            self.add_queue_check_thread()
+            self.add_other_threads()
 
-        # real time graph (triggered by CLI, runs in main thread due to
-        # matplotlib backend problems if not) --------------------------------
-        self.data_graph()
+            for thread in self.threads:
+                thread.start()
 
-        for thread in self.threads:
-            thread.join()
+            # Add CLI. This one is a bit particular because it is blocking
+            # with input() and has to be manually stopped. ----------------
+            command_input = ClI(self.recordings, self.properties, self.events)
+            self.cli_thread = Thread(target=command_input.run)
+            self.cli_thread.start()
 
-        print('Recording stopped.')
+            # real time graph (triggered by CLI, runs in main thread due to
+            # GUI backend problems if not) --------------------------------
+            self.data_graph()
+
+        except Exception as e:
+            error_occurred = True
+            print(f'\nERROR during recording: {e}. \n Stopping ... \n')
+            print_exc()
+
+        except KeyboardInterrupt:
+            error_occurred = True
+            print('\nManual interrupt by Ctrl-C event.\n Stopping ...\n')
+
+        finally:
+
+            self.e_stop.set()
+
+            for thread in self.threads:
+                thread.join()
+
+            if error_occurred:
+                print('\nIMPORTANT: CLI still running. Input "q" to stop.\n')
+
+            self.cli_thread.join()
+
+            print('Recording Stopped')
 
     # ------------------------------------------------------------------------
     # =============================== Threads ================================
@@ -433,7 +454,7 @@ class RecordBase:
 
     # ========================== Write data to file ==========================
 
-    def _try_save(self,  measurement, recording, file):
+    def _try_save(self, measurement, recording, file):
         """Function to write data to file, used by data_save."""
         try:
             recording.save(measurement, file)
