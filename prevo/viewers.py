@@ -359,12 +359,15 @@ class CvSingleViewer(SingleViewer):
             image = self._measurement_to_image(data)
             self._manage_info(image=image)
 
+            if image.ndim > 2:
+                # openCV works with BGR data
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             cv2.imshow(self.name, image)
             self._store_display_times()
 
     def _display_info(self, info, image=None):
         cv2.putText(image, info, (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                    2, (255, 255, 255), 2, cv2.LINE_AA)
+                    1, (255, 255, 255), 2, cv2.LINE_AA)
 
     def run(self):
         """Loop to run live viewer"""
