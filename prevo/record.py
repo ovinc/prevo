@@ -417,6 +417,9 @@ class RecordBase:
                     ClI._set_property_base(self, ppty_cmd, name,
                                            value, objects=self.recordings)
 
+                    # To avoid geting another image immediately
+                    recording.timer.checkpt()
+
             while not self.e_stop.is_set():
 
                 try:
