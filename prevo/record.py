@@ -34,6 +34,20 @@ import oclock
 from clivo import CommandLineInterface as ClI
 
 
+# ================================ MISC Tools ================================
+
+
+def try_thread(function):
+    """Decorator to make threaded functions return & print errors if errors occur"""
+    def wrapper(*args, **kwargs):
+        try:
+            function(*args, **kwargs)
+        except Exception as e:
+            _, name = args
+            print(f'\nERROR for {function.__name__} with {name} !!! \n{e}')
+            return
+    return wrapper
+
 
 # ========================== Sensor base classes =============================
 
@@ -388,6 +402,7 @@ class RecordBase:
 
     # =========================== Data acquisition ===========================
 
+    @try_thread
     def data_read(self, name):
         """Read data from sensor and store it in data queues."""
 
@@ -463,6 +478,7 @@ class RecordBase:
             recording.save(measurement, file)
         except Exception as error:
             print(f'Data saving error for {recording.name}: {error}')
+            print_exc()
 
     def data_save(self, name):
         """Save data that is stored in a queue by data_read."""
