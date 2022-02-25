@@ -27,6 +27,7 @@ from pathlib import Path
 from threading import Event, Thread
 from queue import Queue, Empty
 from traceback import print_exc
+import os
 
 # Non-standard imports
 from tqdm import tqdm
@@ -44,7 +45,14 @@ def try_thread(function):
             function(*args, **kwargs)
         except Exception as e:
             _, name = args
-            print(f'\nERROR for {function.__name__} with {name} !!! \n{e}')
+            nmax, _ = os.get_terminal_size()
+            print('\n')
+            print('=' * nmax)
+            print(f'ERROR for {function.__name__} recording stopped for {name}')
+            print('-' * nmax)
+            print_exc()
+            print('=' * nmax)
+            print('\n')
             return
     return wrapper
 
