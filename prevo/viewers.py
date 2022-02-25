@@ -374,9 +374,9 @@ class CvSingleViewer(SingleViewer):
         while (cv2.getWindowProperty(self.name, cv2.WND_PROP_VISIBLE) > 0):
             self._update_window()
             if self.e_stop.is_set():
+                cv2.destroyWindow(self.name)
                 break
             cv2.waitKey(int(self.dt_graph * 1000))
-        cv2.destroyWindow(self.name)
 
 
 class CvMultipleViewer(MultipleViewer):

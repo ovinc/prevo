@@ -193,7 +193,7 @@ class RecordBase:
     """
 
     # Warnings when queue size goes over some limits
-    queue_warning_limits = 100, 1000, 10000
+    queue_warning_limits = 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9
 
     def __init__(self,
                  recordings,
@@ -451,15 +451,13 @@ class RecordBase:
                 # Measurement has failed .........................................
                 except SensorError:
                     if not failed_reading:  # means it has not failed just before
-                        recording.print_info_on_failed_reading(recording.name,
-                                                               'failed')
+                        recording.print_info_on_failed_reading('failed')
                     failed_reading = True
 
                 # Measurement is OK ..............................................
                 else:
                     if failed_reading:      # means it has failed just before
-                        recording.print_info_on_failed_reading(recording.name,
-                                                               'resumed')
+                        recording.print_info_on_failed_reading('resumed')
                         failed_reading = False
 
                     measurement = recording.format_measurement(data)
@@ -488,6 +486,7 @@ class RecordBase:
             print(f'Data saving error for {recording.name}: {error}')
             print_exc()
 
+    @try_thread
     def data_save(self, name):
         """Save data that is stored in a queue by data_read."""
 
