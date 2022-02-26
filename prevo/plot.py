@@ -22,6 +22,7 @@
 
 # Standard library imports
 from abc import ABC, abstractmethod
+from datetime import datetime
 from threading import Event, Thread
 from queue import Queue
 from pathlib import Path
@@ -44,18 +45,45 @@ from .record import SensorError
 # method. The converter was registered by pandas on import. Future versions of
 # pandas will require you to explicitly register matplotlib converters."
 try:
+    import pandas as pd
     from pandas.plotting import register_matplotlib_converters
     register_matplotlib_converters()
 except ModuleNotFoundError:
-    pass
+    pandas_available = False
+else:
+    pandas_available = True
+
+
+# Misc =======================================================================
+
+
+local_timezone = tzlocal.get_localzone()
+
+
+# ----------------------------------------------------------------------------
 
 
 class GraphBase(ABC):
     """Base class for managing plotting of arbitrary measurement data"""
 
+    def format_measurement(self, measurement):
+        """Transform measurement from the queue into something usable by plot()
+
+        must return a dict with keys (at least):
+        - 'name' (identifier of sensor)
+        - 'values' (iterable of numerical values read by sensor)
+        - 'time' (time)
+
+        Subclass to adapt to your application.
+        """
+        pass
+
     @abstractmethod
     def plot(self, measurement):
-        """Plot individual measurement on existing graph."""
+        """Plot individual measurement on existing graph.
+
+        Uses output of self.format_measurement()
+        """
         pass
 
     @abstractmethod
@@ -94,7 +122,7 @@ class NumericalGraph(GraphBase):
         self.colors = colors
         self.dt_graph = dt_graph
 
-        self.timezone = tzlocal.get_localzone()
+        self.timezone = local_timezone
 
         self.fig, self.axs = self.create_axes()
 
@@ -186,28 +214,53 @@ class NumericalGraph(GraphBase):
 
     # ============================= Main methods =============================
 
+    def format_measurement(self, measurement):
+        """Transform measurement from the queue into something usable by plot()
+
+        must return a dict with keys (at least):
+        - 'name' (identifier of sensor)
+        - 'values' (iterable of numerical values read by sensor)
+        - 'time' (time)
+
+        Subclass to adapt to your application.
+        """
+        data = {key: measurement[key] for key in ('name', 'values')}
+        t_unix = measurement['time (unix)']
+        try:
+            # works if time is a single value (int or float)
+            data['time'] = datetime.fromtimestamp(t_unix, local_timezone)
+        except TypeError:
+            # works if time is an array
+            if pandas_available:
+                utc_time = pd.to_datetime(t_unix, unit='s', utc=True)
+                data['time'] = utc_time.dt.tz_convert(local_timezone)
+            else:
+                raise ValueError('Cannot convert time to datetime')
+
+        return data
+
     def plot(self, measurement):
         """Generic plot method that chooses axes depending on data type.
 
-        measurement is an object of Measurement() or SavedMeasurment() classes
+        measurement is an object from the data queue.
         """
         # The line below allows some sensors to avoid being plotted by reading
         # None when called.
         if measurement is None:
             return
 
-        measurement.format_for_plot()
+        data = self.format_measurement(measurement)
 
-        name = measurement.name
-        values = measurement.values
-        t = measurement.time
+        name = data['name']
+        values = data['values']
+        time = data['time']
 
         dtypes = self.data_types[name]  # all data types for this specific signal
         clrs = self.colors[name]
 
         for value, dtype, clr in zip(values, dtypes, clrs):
             ax = self.axs[dtype]  # plot data in correct axis depending on type
-            ax.plot(t, value, '.', color=clr)
+            ax.plot(time, value, '.', color=clr)
 
         # Use Concise Date Formatting for minimal space used on screen by time
         different_types = set(dtypes)
@@ -279,31 +332,32 @@ class NumericalGraph(GraphBase):
 class PlotSavedData:
     """Class to create graphs from saved data."""
 
-    def __init__(self, names, graph, SavedMeasurement, file_names, path='.'):
+    def __init__(self, names, graph, SavedData, file_names, path='.'):
         """Parameters:
 
         - names: names of sensors/recordings to consider
         - graph: object of GraphBase class and subclasses
-        - SavedMeasurement: Measurement class that manages data loading
+        - SavedData: subclass of measurement.SavedDataBase
                             must have (name, filename, path) as arguments
-                            and must define load() and format_for_plot()
+                            and must define load() and format_as_measurement()
                             (see measurements.py)
         - file_names: dict {name: filename (str)} of files containing data
         - path: directory in which data is saved
         """
         self.names = names
         self.graph = graph
-        self.SavedMeasurement = SavedMeasurement
+        self.SavedData = SavedData
         self.file_names = file_names
         self.path = Path(path)
 
     def show(self):
         """Static plot of saved data"""
         for name in self.names:
-            measurement = self.SavedMeasurement(name,
-                                                filename=self.file_names[name],
-                                                path=self.path)
-            measurement.load()
+            saved_data = self.SavedData(name,
+                                        filename=self.file_names[name],
+                                        path=self.path)
+            saved_data.load()
+            measurement = saved_data.format_as_measurement()
             self.graph.plot(measurement)
         self.graph.fig.tight_layout()
         plt.show(block=False)
@@ -359,29 +413,23 @@ class PlotUpdatedData:
 class PlotLiveSensors(PlotUpdatedData):
     """Create live graph by reading the sensors directly."""
 
-    def __init__(self, names, graph, Sensors, LiveMeasurement, dt_data=1):
+    def __init__(self, graph, recordings, dt_data=1):
         """Parameters:
 
-        - names: names of sensors/recordings to consider
         - graph: object of GraphBase class and subclasses
-        - Sensors: dict{name: Sensor class}
-        - LiveMeasurement: Measurement class that manages live data formatting
-                           must have (name, data) as arguments and must
-                           a format_for_plot() method.
-                           (see measurements.py)
+        - recordings: dict {name: recording(RecordingBase) object}
         - dt_data: how often (in s) sensors are probed"""
-        self.names = names
-        self.Sensors = Sensors
-        self.LiveMeasurement = LiveMeasurement
+        self.recordings = recordings
+        self.names = list(recordings)
 
         super().__init__(graph=graph, dt_data=dt_data)
 
     def get_data(self, name):
         """Check if new data is read by sensor, and put it in data queue."""
         self.timer.reset()
-        Sensor = self.Sensors[name]
+        recording = self.recordings[name]
 
-        with Sensor() as sensor:
+        with recording.Sensor() as sensor:
 
             while not self.e_stop.is_set():
                 try:
@@ -389,7 +437,8 @@ class PlotLiveSensors(PlotUpdatedData):
                 except SensorError:
                     pass
                 else:
-                    measurement = self.LiveMeasurement(name, data)
+                    measurement = recording.format_measurement(data)
+                    recording.after_measurement()
                     self.queues[name].put(measurement)
                     self.timer.checkpt()
 
@@ -397,17 +446,16 @@ class PlotLiveSensors(PlotUpdatedData):
 class PlotSavedDataUpdated(PlotUpdatedData, PlotSavedData):
     """Extends PlotSavedData to be able to periodically read file to update."""
 
-    def __init__(self, names, graph, SavedMeasurement, file_names,
+    def __init__(self, names, graph, SavedData, file_names,
                  path='.', dt_data=1):
         """Parameters:
 
         - names: names of sensors/recordings to consider
         - graph: object of GraphBase class and subclasses
-        - SavedMeasurement: Measurement class that manages data loading
-                            must have (name, filename, path) as arguments and
-                            must define load(), format_for_plot() and
-                            number_of_measurements() methods
-                            (see measurements.py)
+        - SavedData: Measurement class that manages data loading
+                     must have (name, filename, path) as arguments and
+                     must define load(), format_as_measurement() and
+                     number_of_measurements() methods (see measurements.py)
         - file_names: dict {name: filename (str)} of files containing data
         - path: directory in which data is saved
         - dt_data: how often (in s) the files are checked for updates.
@@ -415,7 +463,7 @@ class PlotSavedDataUpdated(PlotUpdatedData, PlotSavedData):
         PlotSavedData.__init__(self,
                                names=names,
                                graph=graph,
-                               SavedMeasurement=SavedMeasurement,
+                               SavedData=SavedData,
                                file_names=file_names,
                                path=path)
 
@@ -427,19 +475,20 @@ class PlotSavedDataUpdated(PlotUpdatedData, PlotSavedData):
         """Check if new data is added to file, and put it in data queue."""
         self.timer.reset()
 
-        measurement = self.SavedMeasurement(name,
-                                            filename=self.file_names[name],
-                                            path=self.path)
+        saved_data = self.SavedData(name,
+                                    filename=self.file_names[name],
+                                    path=self.path)
 
-        n0 = measurement.number_of_measurements()
+        n0 = saved_data.number_of_measurements()
 
         while not self.e_stop.is_set():
 
-            n = measurement.number_of_measurements()
+            n = saved_data.number_of_measurements()
 
             if n > n0:
-                measurement.load(nrange=(n0 + 1, n))
-                if measurement.data is not None:
+                saved_data.load(nrange=(n0 + 1, n))
+                if saved_data.data is not None:
+                    measurement = saved_data.format_as_measurement()
                     self.queues[name].put(measurement)
                     n0 = n
 

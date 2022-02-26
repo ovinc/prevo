@@ -144,13 +144,6 @@ class RecordingBase(ABC):
     # Compulsory methods to subclass -----------------------------------------
 
     @abstractmethod
-    def format_measurement(self, data):
-        """How to format the data given by self.Sensor.read().
-
-        Returns a measurement object (e.g. dict, value, custom class etc.)."""
-        pass
-
-    @abstractmethod
     def init_file(self, file_manager):
         """How to init the (already opened) data file (columns etc.).
 
@@ -167,6 +160,12 @@ class RecordingBase(ABC):
         pass
 
     # Optional methods to subclass -------------------------------------------
+
+    def format_measurement(self, data):
+        """How to format the data given by self.Sensor.read().
+
+        Returns a measurement object (e.g. dict, value, custom class etc.)."""
+        return data
 
     def after_measurement(self):
         """Define what to do after measurement has been done and formatted.

@@ -11,6 +11,7 @@ import pytest
 
 # local imports
 import prevo
+from prevo.measurements import SavedCsvData
 
 
 datafolder = Path(prevo.__file__).parent / '..' / 'data/manip'
@@ -34,30 +35,30 @@ lines = {'P': (1616490450.506, 0.167, 2727.25),
          'T': (1616490515.961, 2.623, 26.8932, 25.4829),
          'B1': (1616490514.585, 0.091, 24.2640)}
 
-measP = prevo.SavedMeasurementCsv('P', filenames['P'], datafolder)
-measT = prevo.SavedMeasurementCsv('T', filenames['T'], path=datafolder)
-measB1 = prevo.SavedMeasurementCsv(name='B1', filename=filenames['B1'],
-                              path=datafolder, csv_separator='\t')
+measP = SavedCsvData('P', filenames['P'], datafolder)
+measT = SavedCsvData('T', filenames['T'], path=datafolder)
+measB1 = SavedCsvData(name='B1', filename=filenames['B1'],
+                      path=datafolder, csv_separator='\t')
 
-measurements = {'P': measP, 'T': measT, 'B1': measB1}
+saved_datas = {'P': measP, 'T': measT, 'B1': measB1}
 
 
 def test_number_of_measurements():  # test with a variety of call options
-    ns = [meas.number_of_measurements() for meas in measurements.values()]
+    ns = [sdata.number_of_measurements() for sdata in saved_datas.values()]
     assert ns == list(meas_numbers.values())
 
 
 @pytest.mark.parametrize('name', names)
 def test_load_full(name):             # test full loading of data from file
-    measurement = measurements[name]
-    measurement.load()
-    assert len(measurement.data) == meas_numbers[name]
-    assert tuple(measurement.data.loc[n - 1].round(decimals=4)) == lines[name]
+    sdata = saved_datas[name]
+    sdata.load()
+    assert len(sdata.data) == meas_numbers[name]
+    assert tuple(sdata.data.loc[n - 1].round(decimals=4)) == lines[name]
 
 
 @pytest.mark.parametrize('name', names)
 def test_load_partial(name):
-    measurement = measurements[name]
-    measurement.load(nrange)  # test partial loading of data
-    assert len(measurement.data) == nrange[1] - nrange[0] + 1
-    assert tuple(measurement.data.loc[nred - 1].round(decimals=4)) == lines[name]
+    sdata = saved_datas[name]
+    sdata.load(nrange)  # test partial loading of data
+    assert len(sdata.data) == nrange[1] - nrange[0] + 1
+    assert tuple(sdata.data.loc[nred - 1].round(decimals=4)) == lines[name]

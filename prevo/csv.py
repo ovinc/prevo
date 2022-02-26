@@ -87,6 +87,10 @@ class CsvFile:
             except UnboundLocalError:  # handles the case of an empty file
                 return 0
 
+    def number_of_measurements(self):
+        """Can be subclassed (here, assumes column titles)"""
+        return self.number_of_lines() - 1
+
     def _write_columns(self, file):
         """How to init the file containing the data (when file already open)"""
         columns_str = f'{self.csv_separator.join(self.column_names)}\n'
@@ -141,6 +145,15 @@ class RecordingToCsv:
         if self.csv_file.number_of_lines() == 0:
             self.csv_file._write_columns(file)
 
+    def format_measurement(self, measurement):
+        """Format raw sensor data.
+
+        Here, we assume a standard measurement as a dict with keys
+        'time (unix)', 'dt (s)', 'values'
+        """
+        measurement['name'] = self.name
+        return measurement
+
     def measurement_to_data_iterable(self, measurement):
         """How to convert measurement to an iterable of data.
 
@@ -153,9 +166,13 @@ class RecordingToCsv:
         Iterable of data to be saved in CSV file
 
         The length of the iterable must be equal to that of column_names.
-        Needs to be defined in subclasses.
+
+        Can be redefined in subclasses.
+
+        Here, we assume a standard measurement as a dict with keys
+        'time (unix)', 'dt (s)', 'values'
         """
-        pass
+        return (measurement['time (unix)'], measurement['dt (s)']) + measurement['values']
 
     def save(self, measurement, file):
         """Save to file"""
