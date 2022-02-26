@@ -403,8 +403,13 @@ class RecordBase:
 
     @try_thread
     def cli(self):
-        command_input = ClI(self.recordings, self.properties, self.events)
-        command_input.run()
+        if self.recordings:  # if no recordings provided, no need to record.
+            command_input = ClI(self.recordings, self.properties, self.events)
+            command_input.run()
+        else:
+            self.e_stop.set()
+            raise ValueError('No recordings provided. Stopping ...')
+
 
     @try_thread
     def data_read(self, name):
