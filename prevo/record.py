@@ -420,8 +420,6 @@ class RecordBase:
         initial_ppty_settings = self.initial_property_settings[name]
         saving_queue = self.q_save[name]
         plotting_queue = self.q_plot[name]
-
-        recording.timer.reset()
         failed_reading = False  # True temporarily if P or T reading fails
 
         # Recording loop -----------------------------------------------------
@@ -440,8 +438,8 @@ class RecordBase:
                     ClI._set_property_base(self, ppty_cmd, name,
                                            value, objects=self.recordings)
 
-                    # To avoid geting another image immediately
-                    recording.timer.checkpt()
+            # Without this here, the first data points are irregularly spaced.
+            recording.timer.reset()
 
             while not self.e_stop.is_set():
 
