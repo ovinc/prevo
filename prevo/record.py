@@ -44,11 +44,16 @@ def try_thread(function):
         try:
             function(*args, **kwargs)
         except Exception as e:
-            _, name = args
+            try:
+                name = kwargs['name']
+            except KeyError:
+                sensor_info = ''
+            else:
+                sensor_info = f' for sensor "{name}"'
             nmax, _ = os.get_terminal_size()
             print('\n')
             print('=' * nmax)
-            print(f'ERROR for {function.__name__} recording stopped for {name}')
+            print(f'ERROR in {function.__name__}(){sensor_info}')
             print('-' * nmax)
             print_exc()
             print('=' * nmax)
@@ -331,22 +336,10 @@ class RecordBase:
     # =================== START RECORDING (MULTITHREAD) ======================
     # ------------------------------------------------------------------------
 
-    def add_data_reading_threads(self):
-        """Read data from each sensor and put in queue"""
+    def add_named_threads(self, function):
         for name in self.recordings:
-            self.threads.append(Thread(target=self.data_read, args=(name,)))
-
-    def add_data_saving_threads(self):
-        """save data present in the data queues whenever they are not empty.
-
-        The with statement allows the file to stay open during measurement.
-        """
-        for name in self.recordings:
-            self.threads.append(Thread(target=self.data_save, args=(name,)))
-
-    def add_queue_check_thread(self):
-        """Check size of queues periodically"""
-        self.threads.append(Thread(target=self.check_queue_sizes))
+            kwargs = {'name': name}
+            self.threads.append(Thread(target=function, kwargs=kwargs))
 
     def add_other_threads(self):
         """Add other threads for additional functions defined by user."""
@@ -363,9 +356,9 @@ class RecordBase:
 
             self.threads = []
 
-            self.add_data_reading_threads()
-            self.add_data_saving_threads()
-            self.add_queue_check_thread()
+            self.add_named_threads(self.data_read)
+            self.add_named_threads(self.data_save)
+            self.threads.append(Thread(target=self.check_queue_sizes))
             self.add_other_threads()
 
             for thread in self.threads:
@@ -373,8 +366,7 @@ class RecordBase:
 
             # Add CLI. This one is a bit particular because it is blocking
             # with input() and has to be manually stopped. ----------------
-            command_input = ClI(self.recordings, self.properties, self.events)
-            self.cli_thread = Thread(target=command_input.run)
+            self.cli_thread = Thread(target=self.cli)
             self.cli_thread.start()
 
             # real time graph (triggered by CLI, runs in main thread due to
@@ -409,6 +401,11 @@ class RecordBase:
     # -------------------- (CLI is defined elsewhere) ------------------------
 
     # =========================== Data acquisition ===========================
+
+    @try_thread
+    def cli(self):
+        command_input = ClI(self.recordings, self.properties, self.events)
+        command_input.run()
 
     @try_thread
     def data_read(self, name):
@@ -480,9 +477,15 @@ class RecordBase:
         """Function to write data to file, used by data_save."""
         try:
             recording.save(measurement, file)
-        except Exception as error:
-            print(f'Data saving error for {recording.name}: {error}')
+        except Exception:
+            nmax, _ = os.get_terminal_size()
+            print('\n')
+            print('-' * nmax)
+            print(f'Data saving error for {recording.name}:')
+            print('(trying for new data at next time step)')
             print_exc()
+            print('-' * nmax)
+            print('\n')
 
     @try_thread
     def data_save(self, name):
@@ -579,6 +582,7 @@ class RecordBase:
                     print(f'\n{q_type} buffer size now below {qmax} for {name}')
                     q_size_over[qmax] = False
 
+    @try_thread
     def check_queue_sizes(self):
         """Periodically verify that queue sizes are not over limits"""
 
