@@ -162,7 +162,7 @@ Misc. info
 Module requirements
 -------------------
 
-### Modules outside of standard library
+### Packages outside of standard library
 
 (installed automatically by pip if necessary)
 
@@ -171,6 +171,10 @@ Module requirements
 - oclock >= 1.2.2 (timing tools)
 - clivo >= 0.2.0 (command line interface)
 - matplotlib >= 3.1 (due to `cache_frame_data` option in `FuncAnimation`)
+- numpy
+
+### Optional packages
+
 - pandas (optional, for csv loading methods)
 - opencv-python (optional, for specific camera viewers)
 

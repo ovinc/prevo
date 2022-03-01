@@ -151,6 +151,8 @@ class RecordingToCsv:
         Here, we assume a standard measurement as a dict with keys
         'time (unix)', 'dt (s)', 'values'
         """
+        if measurement is None:
+            return
         measurement['name'] = self.name
         return measurement
 

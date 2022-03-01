@@ -320,8 +320,8 @@ class RecordBase:
 
             # If specific input (e.g. dt_P=10), update recording to that value
 
-            for recording_name in self.recordings:
-                cmd = f'{ppty_cmd}_{recording_name}'
+            for name in self.recordings:
+                cmd = f'{ppty_cmd}_{name}'
                 try:
                     value = ppty_kwargs[cmd]
                 except KeyError:

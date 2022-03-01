@@ -29,6 +29,7 @@ from pathlib import Path
 
 # Non standard imports
 import tzlocal
+import numpy as np
 import matplotlib
 
 matplotlib.use('Qt5Agg')
@@ -214,6 +215,27 @@ class NumericalGraph(GraphBase):
 
     # ============================= Main methods =============================
 
+    @staticmethod
+    def _to_datetime_numpy(unix_times):
+        """Transform iterable / array of unix times into datetimes.
+
+        Note: this is the fastest method, but the datetimes are in UTC format
+              (not local time)
+        """
+        return (np.array(unix_times) * 1e9).astype('datetime64[ns]')
+
+    @staticmethod
+    def _to_datetime_pandas(unix_times):
+        """Transform iterable / array of datetimes into pandas Series.
+
+        Note: here, the datetimes are in local timezone format, but this is
+              slower than the numpy approach.
+        """
+        # For some reason, it's faster (and more precise) to convert to numpy first
+        np_times = (np.array(unix_times) * 1e9).astype('datetime64[ns]')
+        pd_times = pd.Series(np_times)
+        return pd.to_datetime(pd_times, utc=True).dt.tz_convert(local_timezone)
+
     def format_measurement(self, measurement):
         """Transform measurement from the queue into something usable by plot()
 
@@ -232,10 +254,9 @@ class NumericalGraph(GraphBase):
         except TypeError:
             # works if time is an array
             if pandas_available:
-                utc_time = pd.to_datetime(t_unix, unit='s', utc=True)
-                data['time'] = utc_time.dt.tz_convert(local_timezone)
+                data['time'] = self._to_datetime_pandas(t_unix)
             else:
-                raise ValueError('Cannot convert time to datetime')
+                data['time'] = self._to_datetime_numpy(t_unix)
 
         return data
 
