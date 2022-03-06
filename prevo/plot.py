@@ -444,8 +444,7 @@ class PlotUpdatedData:
                                    e_stop=self.e_stop,
                                    e_close=self.e_stop,
                                    e_graph=self.e_graph,
-                                   dt_graph=self.dt_graph,
-                                   timer=self.timer)
+                                   dt_graph=self.dt_graph)
         update_graph.run()
 
 
