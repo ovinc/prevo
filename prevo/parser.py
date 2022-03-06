@@ -21,9 +21,13 @@
 
 
 import argparse
+from ast import parse
 
 
-def parse_function(functions, description='', default_function=None):
+def parse_function(functions,
+                   package_name=None,
+                   description='',
+                   default_function=None):
     """Trigger a function with arguments from command line.
 
     Parameters
@@ -31,14 +35,20 @@ def parse_function(functions, description='', default_function=None):
     - functions: dict {name: function} (name is used in the CLI to refer
                  to the function and can be the function full name or a
                  shortcut)
+    - package name: optional, to print help correctly when using parser in
+                    __main__.py file of a package.
+                    (see e.g. https://bugs.python.org/issue22240)
     - description: any specific description of functions/arguments to add
                    to the default commmand line parser help
     - default_function: name of the function (functions dict key) that is
                         triggered if no function name is given (optional).
     """
+    if package_name is not None:
+        add_kwargs = {'prog': f"python -m {package_name}"}
 
     parser = argparse.ArgumentParser(description=description,
-                                     formatter_class=argparse.RawTextHelpFormatter)
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     **add_kwargs)
 
     # The nargs='?' is to have a positional argument with a default value
     msg_func = f"\nFunction to trigger.\nAvailable: {', '.join(functions)}."
@@ -66,14 +76,23 @@ def parse_function(functions, description='', default_function=None):
             try:
                 # Avoids having to explicily put type
                 exec(f"args.append({a})")
-            except NameError:
+            except (NameError, SyntaxError):
                 # In case of strings, use the input as the string itself
                 args.append(a)
         else:
             try:
                 # Same strategy as above
                 exec(f"kwargs['{k}'] = {v}")
-            except NameError:
+            except (NameError, SyntaxError):
                 kwargs[k] = v
 
-    return functions[parsed.function](*args, **kwargs)
+    try:
+        return functions[parsed.function](*args, **kwargs)
+    except KeyError:
+        # If default function not supplied, argparse thinks the first argument
+        # is the function name
+        try:
+            args.append(parsed.function)
+            return functions[default_function](*args, **kwargs)
+        except Exception:
+            print('Unknown command')
