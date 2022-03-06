@@ -148,9 +148,10 @@ Additional tools
 
 Some elements are also provided to simplify and/or extend the classes above:
 
-- read / save with CSV files (see `prevo.csv`)
 - plot numerical data in real time (see `prevo.plot`)
 - live view images from camera-like sensors (see `prevo.viewers`)
+- read / save with CSV files (see `prevo.csv`)
+- parse command line arguments to trigger functions or class methods (see `prevo.parser`)
 - some tools to format measurements for `Record`-like classes (see `prevo.measurements`)
 
 See docstrings for more help.
