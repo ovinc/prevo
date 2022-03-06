@@ -43,7 +43,7 @@ def try_thread(function):
     def wrapper(*args, **kwargs):
         try:
             function(*args, **kwargs)
-        except Exception as e:
+        except Exception:
             try:
                 name = kwargs['name']
             except KeyError:
@@ -114,7 +114,7 @@ class SensorBase(ABC):
 class RecordingBase(ABC):
     """Base class for recording object used by RecordBase. To subclass"""
 
-    def __init__(self, Sensor, dt, continuous=False, warnings=True, precise=False):
+    def __init__(self, Sensor, dt, continuous=False, warnings=False, precise=False):
         """Parameters:
 
         - Sensor: subclass of SensorBase.
@@ -524,6 +524,9 @@ class RecordBase:
                 saving_timer.checkpt()
 
         # Buffering waitbar --------------------------------------------------
+
+        if not saving_queue.qsize():
+            return
 
         print(f'Data buffer saving started for {name}')
 
