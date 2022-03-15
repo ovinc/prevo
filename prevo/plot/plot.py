@@ -21,7 +21,6 @@
 
 
 # Standard library imports
-from abc import ABC, abstractmethod
 from datetime import datetime
 from threading import Event, Thread
 from queue import Queue
@@ -36,9 +35,9 @@ matplotlib.use('Qt5Agg')
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from matplotlib.animation import FuncAnimation
 import oclock
 
+from .general import NumericalGraphBase, UpdateGraph
 from ..record import SensorError
 
 # The two lines below have been added following a console FutureWarning:
@@ -61,167 +60,7 @@ else:
 local_timezone = tzlocal.get_localzone()
 
 
-# ----------------------------------------------------------------------------
-
-
-class GraphBase(ABC):
-    """Base class for managing plotting of arbitrary measurement data"""
-
-    @abstractmethod
-    def format_measurement(self, measurement):
-        """Transform measurement from the queue into something usable by plot()
-
-        must return a dict with keys (at least):
-        - 'name' (identifier of sensor)
-        - 'values' (iterable of numerical values read by sensor)
-        - 'time' (time)
-
-        Subclass to adapt to your application.
-        """
-        pass
-
-    @abstractmethod
-    def plot(self, measurement):
-        """Plot individual measurement on existing graph.
-
-        Uses output of self.format_measurement()
-        """
-        pass
-
-
-class NumericalGraphBase(GraphBase):
-
-    def __init__(self, names, data_types, colors=None):
-        """Initiate figures and axes for data plot as a function of asked types.
-
-        Input
-        -----
-        - names: iterable of names of recordings/sensors that will be plotted.
-        - 'data types': dict with the recording names as keys, and the
-                        corresponding data types as values.
-        - 'colors': optional dict of colors with keys 'fig', 'ax', and the
-                    names of the recordings.
-        """
-        self.names = names
-        self.data_types = data_types
-        self.colors = colors
-
-        self.fig, self.axs = self.create_axes()
-
-        self.format_graph()
-        self.set_colors()
-        self.fig.tight_layout()
-
-        # Create onclick callback to activate / deactivate autoscaling
-        self.cid = self.fig.canvas.mpl_connect('button_press_event',
-                                               self.onclick)
-
-    @property
-    def all_data_types(self):
-        """Return a set of all datatypes corresponding to the active names."""
-        all_types = ()
-        for name in self.names:
-            data_types = self.data_types[name]
-            all_types += data_types
-        return set(all_types)
-
-    @staticmethod
-    def onclick(event):
-        """Activate/deactivate autoscale by clicking to allow for data inspection.
-
-        - Left click (e.g. when zooming, panning, etc.): deactivate autoscale
-        - Right click: reactivate autoscale.
-        """
-        ax = event.inaxes
-        if ax is None:
-            pass
-        elif event.button == 1:                        # left click
-            ax.axes.autoscale(False, axis='both')
-        elif event.button == 3:                        # right click
-            ax.axes.autoscale(True, axis='both')
-        else:
-            pass
-
-    def set_colors(self):
-        """"Define fig/ax colors if supplied"""
-        if self.colors is not None:
-            self.fig.set_facecolor(self.colors['fig'])
-
-            for ax in self.axs.values():
-                ax.set_facecolor(self.colors['ax'])
-                ax.grid()
-        else:
-            self.colors = {name: None for name in self.names}
-
-    def create_axes(self):
-        """To be defined in subclasses. Returns fig, axs"""
-        pass
-
-    def format_graph(self):
-        """To be defined in subclasses."""
-        pass
-
-
-class UpdateGraph:
-
-    def __init__(self, graph, q_plot, e_stop,
-                 e_close=None, e_graph=None, dt_graph=1):
-        """Update plot with data received from a queue.
-
-        INPUTS
-        ------
-        - graph: object of GraphBase class and subclasses
-        - q_plot: dict {name: queue} with sensor names and data queues
-        - e_stop is set when there is an external stop request.
-        - e_close (optional) is set when the figure has been closed
-        - e_graph (optional) is set when the graph is activated
-        - 'dt graph': time interval to update the graph
-
-        Attention, if the figure is closed, the e_close event is triggered so
-        do not put in e_close a threading event that is supposed to stay alive
-        even if the figure gets closed. Rather, use the e_stop event.
-        """
-        self.graph = graph
-        self.q_plot = q_plot
-        self.e_stop = e_stop
-        self.e_close = e_close
-        self.e_graph = e_graph
-        self.dt_graph = dt_graph
-
-        self.graph.fig.canvas.mpl_connect('close_event', self.on_fig_close)
-
-    def on_fig_close(self, event):
-        """When figure is closed, set threading events accordingly."""
-        if self.e_close is not None:
-            self.e_close.set()
-        if self.e_graph is not None:
-            self.e_graph.clear()
-
-    def plot_new_data(self, i):
-        """define what to do at each loop of the matplotlib animation."""
-
-        for queue in self.q_plot.values():
-            while queue.qsize() > 0:
-                measurement = queue.get()
-                self.graph.plot(measurement)
-
-        if self.e_stop.is_set():
-            plt.close(self.graph.fig)
-            # since figure is closed, e_close and e_graph are taken care of
-            # by the on_fig_close() function
-
-    def run(self):
-
-        # Below, it does not work if there is no value = before the FuncAnimation
-        ani = FuncAnimation(fig=self.graph.fig,
-                            func=self.plot_new_data,
-                            interval=self.dt_graph * 1000,
-                            cache_frame_data=False)
-
-        plt.show(block=True)  # block=True allow the animation to work even
-        # when matplotlib is in interactive mode (plt.ion()).
-
-        return ani
+# =============================== Main classes ===============================
 
 
 class NumericalGraph(NumericalGraphBase):
@@ -262,7 +101,8 @@ class NumericalGraph(NumericalGraphBase):
             ax.set_ylabel(datatype)
             axs[datatype] = ax
 
-        return fig, axs
+        self.fig = fig
+        self.axs = axs
 
     def format_graph(self):
         """Set colors, time formatting, etc."""
