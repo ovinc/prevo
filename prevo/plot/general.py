@@ -30,6 +30,7 @@ matplotlib.use('Qt5Agg')
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib import cm
 
 
 # ----------------------------------------------------------------------------
@@ -119,14 +120,35 @@ class NumericalGraphBase(GraphBase):
 
     def set_colors(self):
         """"Define fig/ax colors if supplied"""
-        if self.colors is not None:
+        if self.colors is None:
+            self.colors = {}
+        else:
             self.fig.set_facecolor(self.colors['fig'])
-
             for ax in self.axs.values():
                 ax.set_facecolor(self.colors['ax'])
                 ax.grid()
-        else:
-            self.colors = {name: None for name in self.names}
+
+        missing_color_names = []
+        n_missing_colors = 0
+        for name, dtypes in self.data_types.items():
+            try:
+                self.colors[name]
+            except (KeyError, TypeError):
+                missing_color_names.append(name)
+                n_missing_colors += len(dtypes)
+
+        if not n_missing_colors:
+            return
+
+        m = cm.get_cmap('tab20', n_missing_colors)
+        i = 0
+        for name in missing_color_names:
+            dtypes = self.data_types[name]
+            colors = []
+            for _ in dtypes:
+                colors.append(m.colors[i])
+                i += 1
+            self.colors[name] = tuple(colors)
 
     def create_axes(self):
         """To be defined in subclasses. Returns fig, axs"""

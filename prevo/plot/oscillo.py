@@ -51,22 +51,41 @@ class OscilloGraph(NumericalGraphBase):
 
         super().__init__(names=names, data_types=data_types, colors=colors)
 
-        self.previous_measurements = []
-        self.current_measurements = []
+        self.previous_drawings = []
+        self.current_drawings = []
 
         self.reference_time = None
 
     def create_axes(self):
-        self.fig, self.ax = plt.subplots()
+        """Generate figure/axes as a function of input data types"""
+
+        n = len(self.all_data_types)
+        self.fig, axes = plt.subplots(n, 1)
+
+        # Transform axes into a tuple if only one ax
+        try:
+            iter(axes)
+        except TypeError:
+            axes = axes,
+
+        self.axs = {}
+        for ax, datatype in zip(axes, self.all_data_types):
+            ax.set_ylabel(datatype)
+            self.axs[datatype] = ax
 
     def format_graph(self):
-        self.ax.set_xlim((-0.1, self.window_width + 0.1))
+        """Set colors, time formatting, etc."""
         self.ylim = 0, 1
-        self.ax.set_ylim(self.ylim)
-        self.ax.grid()
+        for ax in self.axs.values():
+            ax.set_xlim((-0.1, self.window_width + 0.1))
+            ax.set_ylim(self.ylim)
+            ax.grid()
 
     def format_measurement(self, measurement):
-        """How to move from measurements from the queue to data useful for plotting."""
+        """How to move from measurements from the queue to data useful for plotting.
+
+        Can be subclassed to adapt to various applications.
+        """
         return measurement
 
     @property
@@ -77,61 +96,89 @@ class OscilloGraph(NumericalGraphBase):
     def relative_time(self):
         return self.current_time - self.reference_time
 
+    def create_bars(self):
+        """Create traveling bars"""
+        self.bars = {}
+        for dtype, ax in self.axs.items():
+            bar, = ax.plot((0, 0), self.ylim, '-', c='grey', linewidth=4)
+            self.bars[dtype] = bar
+
+    def refresh_windows(self):
+        """What to do each time the bars exceeed window size"""
+
+        # Without this, memory keeps building up
+        # Tests: 230MB build-up in 5 min without, 14MB buildup with
+        for drawing in self.previous_drawings:
+            for pt in drawing['pts']:
+                pt.remove()
+
+        self.previous_drawings = self.current_drawings
+        self.current_drawings = []
+        self.reference_time += self.window_width
+
     def plot(self, measurement):
+        """Generic plot method that chooses axes depending on data type.
 
-        measurement = self.format_measurement(measurement)
+        measurement is an object from the data queue.
+        """
+        # The line below allows some sensors to avoid being plotted by reading
+        # None when called.
+        if measurement is None:
+            return
 
-        t = measurement['time']
-        value, = measurement['values']
+        data = self.format_measurement(measurement)
+
+        name = data['name']
+        values = data['values']
+        t = data['time']
+
+        dtypes = self.data_types[name]  # all data types for this specific signal
+        clrs = self.colors[name]
 
         if self.reference_time is None:
-            # Take time of first measurement as time zero
-            self.reference_time = t
-            self.bar, = self.ax.plot((0, 0), self.ylim, '-', c='grey', linewidth=4)
+            self.reference_time = t  # Take time of 1st data as time 0
+            self.create_bars()
 
         if t > self.reference_time + self.window_width:
-            # Start new displaying cycle with bar on left of screen
-
-            # Without this, memory keeps building up
-            # Tests: 230MB build-up in 5 min without, 14MB buildup with
-            for measurement in self.previous_measurements:
-                for pt in measurement['pts']:
-                    pt.remove()
-
-            self.previous_measurements = self.current_measurements
-            self.current_measurements = []
-            self.reference_time += self.window_width
+            self.refresh_windows()
 
         t_relative = t - self.reference_time
-        pt, = self.ax.plot(t_relative, value, 'ok')
 
-        measurement['relative time'] = t_relative
-        measurement['pts'] = pt,
+        pts = []
+        for value, dtype, clr in zip(values, dtypes, clrs):
+            ax = self.axs[dtype]  # plot data in correct axis depending on type
+            pt, = ax.plot(t_relative, value, '.', color=clr)
+            pts.append(pt)
 
-        self.current_measurements.append(measurement)
-        self.update_bar()
+        drawing = {'time': t,
+                   'relative time': t_relative,
+                   'pts': pts}
+
+        self.current_drawings.append(drawing)
+        self.update_bars(dtypes=dtypes)
 
     @property
     def animated_artists(self):
-        return self.active_pts + [self.bar]
+        return self.active_pts + list(self.bars.values())
 
     @property
     def active_pts(self):
 
         pts = []
 
-        for measurement in self.previous_measurements:
-            if measurement['time'] >= self.current_time - self.window_width:
-                pts.extend(measurement['pts'])
+        for drawing in self.previous_drawings:
+            if drawing['time'] >= self.current_time - self.window_width:
+                pts.extend(drawing['pts'])
 
-        for measurement in self.current_measurements:
-            pts.extend(measurement['pts'])
+        for drawing in self.current_drawings:
+            pts.extend(drawing['pts'])
 
         return pts
 
-    def update_bar(self):
+    def update_bars(self, dtypes):
         t = self.relative_time
-        self.bar.set_xdata((t, t))
+        for dtype in dtypes:
+            self.bars[dtype].set_xdata((t, t))
 
     def run(self, q_plot, e_stop=None, e_close=None, e_graph=None,
             dt_graph=0.02, blit=True):
