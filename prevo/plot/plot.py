@@ -39,7 +39,7 @@ import matplotlib.dates as mdates
 from matplotlib.animation import FuncAnimation
 import oclock
 
-from .record import SensorError
+from ..record import SensorError
 
 # The two lines below have been added following a console FutureWarning:
 # "Using an implicitly registered datetime converter for a matplotlib plotting
