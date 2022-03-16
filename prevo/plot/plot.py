@@ -191,6 +191,30 @@ class NumericalGraph(NumericalGraphBase):
             ax.xaxis.set_major_locator(self.locator[ax])
             ax.xaxis.set_major_formatter(self.formatter[ax])
 
+    def run(self, q_plot, e_stop=None, e_close=None, e_graph=None,
+            dt_graph=0.1, blit=False):
+        """Run live view of plot with data from queues.
+
+        (Convenience method to instantiate a UpdateGraph object)
+
+        Parameters
+        ----------
+        - q_plot: dict {name: queue} with sensor names and data queues
+        - e_stop (optional): external stop request, closes the figure if set
+        - e_close (optional) is set when the figure has been closed
+        - e_graph (optional) is set when the graph is activated
+        - dt graph: time interval to update the graph
+        - blit: if True, use blitting to speed up the matplotlib animation
+        """
+        update_plot = UpdateGraph(graph=self,
+                                  q_plot=q_plot,
+                                  e_stop=e_stop,
+                                  e_close=e_close,
+                                  e_graph=e_graph,
+                                  dt_graph=dt_graph,
+                                  blit=blit)
+        update_plot.run()
+
 
 # ============== Classes using Graph-like objects to plot data ===============
 

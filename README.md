@@ -1,7 +1,7 @@
 About
 =====
 
-**P**eriodic **RE**cording and **V**isualization of sensor **O**bjects
+**P**eriodic **RE**cording and **V**isualization of (sensor) **O**bjects
 
 This package provides base classes to rapidly create interactive data recording for various applications (e.g. recording of temperature, time-lapses with cameras etc.). Sensors are read in a asynchronous fashion and can have different time intervals for data reading (or be continuous, i.e. as fast as possible). Tools for graphical visualizations of data during recording are also provided.
 
@@ -148,7 +148,7 @@ Additional tools
 
 Some elements are also provided to simplify and/or extend the classes above:
 
-- plot numerical data in real time (see `prevo.plot`)
+- plot numerical data in real time (see `prevo.plot` module and `GraphExamples.ipynb`)
 - live view images from camera-like sensors (see `prevo.viewers`)
 - read / save with CSV files (see `prevo.csv`)
 - parse command line arguments to trigger functions or class methods (see `prevo.parser`)

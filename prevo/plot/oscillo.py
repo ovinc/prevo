@@ -53,25 +53,29 @@ class UpdateGraph(UpdateGraphBase):
 
 class OscilloGraph(NumericalGraphBase):
 
-    def __init__(self, names, data_types, window_width=10, colors=None):
+    def __init__(self, names, data_types, data_ranges, window_width=10, colors=None):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
         -----
         - names: iterable of names of recordings/sensors that will be plotted.
-        - data types: dict with the recording names as keys, and the
+        - data_types: dict with the recording names as keys, and the
                       corresponding data types as values.
                       (dict can have more keys than those in 'names')
+        - data_ranges: dict with the possible data types as keys, and the
+                       corresponding range of values expected for this data
+                       as values. Used to set ylims of graph initially.
+                      (dict can have more keys than actual data types used)
         - window_width: width (in seconds) of the displayed window
         - colors: optional dict of colors with keys 'fig', 'ax', and the
                     names of the recordings.
         """
+        self.data_ranges = data_ranges
         self.window_width = window_width
         self.reference_time = None
 
         super().__init__(names=names, data_types=data_types, colors=colors)
 
-        self.previous_data = self.create_empty_data()
         self.current_data = self.create_empty_data()
 
     def create_empty_data(self):
@@ -103,13 +107,42 @@ class OscilloGraph(NumericalGraphBase):
 
     def format_graph(self):
         """Set colors, time formatting, etc."""
+
         w = self.window_width
-        for ax in self.axs.values():
-            ax.set_xlim((-0.05 * w, 1.05 * w))
+        for dtype, ax in self.axs.items():
+            ax.set_xlim((-0.01 * w, 1.01 * w))
+            ax.set_ylim(self.data_ranges[dtype])
             ax.grid()
 
-        # Initiate line object for each value of each sensor -----------------
+        self.create_lines()
+        self.create_bars()
 
+    def format_measurement(self, measurement):
+        """How to move from measurements from the queue to data useful for plotting.
+
+        Can be subclassed to adapt to various applications.
+        Here, assumes data is incoming in the form of a dictionary with at
+        least keys:
+        - 'name'
+        - 'time (unix)'
+        - 'values'
+        """
+        return measurement
+
+    def on_click():
+        """Here turn off autoscale, which can cause problems with blitting."""
+        pass
+
+    @property
+    def current_time(self):
+        return time.time()
+
+    @property
+    def relative_time(self):
+        return self.current_time - self.reference_time
+
+    def create_lines(self):
+        """Create lines for each value of each sensor"""
         self.lines = {}
         self.lines_list = []
 
@@ -123,36 +156,17 @@ class OscilloGraph(NumericalGraphBase):
 
                 # Plot data in correct axis depending on type
                 ax = self.axs[dtype]
-                line, = ax.plot([], [], '.', color=clr)
+                line, = ax.plot([], [], '.-', color=clr)
 
                 self.lines[name].append(line)
                 # Below, used for returning animated artists for blitting
                 self.lines_list.append(line)
 
-        # Also initiate line objects for traveling bars ----------------------
-
-        self.create_bars()
-
-    def format_measurement(self, measurement):
-        """How to move from measurements from the queue to data useful for plotting.
-
-        Can be subclassed to adapt to various applications.
-        """
-        return measurement
-
-    @property
-    def current_time(self):
-        return time.time()
-
-    @property
-    def relative_time(self):
-        return self.current_time - self.reference_time
-
     def create_bars(self):
         """Create traveling bars"""
         self.bars = {}
         for dtype, ax in self.axs.items():
-            bar = ax.axvline(0, linestyle='-', c='grey', linewidth=4)
+            bar = ax.axvline(0, linestyle='-', c='lightgrey', linewidth=4)
             self.bars[dtype] = bar
 
     def refresh_windows(self):
@@ -163,7 +177,7 @@ class OscilloGraph(NumericalGraphBase):
 
     def manage_reference_time(self, data):
         """Define and update reference time if necessary"""
-        t = data['time']
+        t = data['time (unix)']
         if self.reference_time is None:
             self.reference_time = t  # Take time of 1st data as time 0
         if t > self.reference_time + self.window_width:
@@ -173,7 +187,7 @@ class OscilloGraph(NumericalGraphBase):
         """Store measurement time and values in active data lists."""
 
         name = data['name']
-        rel_time = data['time'] - self.reference_time
+        rel_time = data['time (unix)'] - self.reference_time
         values = data['values']
 
         self.current_data[name]['times'].append(rel_time)
@@ -204,14 +218,14 @@ class OscilloGraph(NumericalGraphBase):
 
                 line.set_data(times, values)
 
-    @property
-    def animated_artists(self):
-        return self.lines_list + list(self.bars.values())
-
     def update_bars(self):
         t = self.relative_time
         for bar in self.bars.values():
             bar.set_xdata(t)
+
+    @property
+    def animated_artists(self):
+        return self.lines_list + list(self.bars.values())
 
     def run(self, q_plot, e_stop=None, e_close=None, e_graph=None,
             dt_graph=0.02, blit=True):
