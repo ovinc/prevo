@@ -24,13 +24,31 @@
 import time
 
 # Non standard imports
-import matplotlib
-matplotlib.use('Qt5Agg')
-
+import numpy as np
 import matplotlib.pyplot as plt
 
 # Local imports
-from .general import NumericalGraphBase, UpdateGraph
+from .general import NumericalGraphBase, UpdateGraphBase
+
+
+class UpdateGraph(UpdateGraphBase):
+
+    def manage_measurement(self, measurement):
+
+        # The line below allows some sensors to avoid being plotted by reading
+        # None when called.
+        if measurement is None:
+            return
+
+        data = self.graph.format_measurement(measurement)
+
+        self.graph.manage_reference_time(data)
+        self.graph.update_current_data(data)
+
+    def after_getting_measurements(self):
+
+        self.graph.update_lines()
+        self.graph.update_bars()
 
 
 class OscilloGraph(NumericalGraphBase):
@@ -42,19 +60,29 @@ class OscilloGraph(NumericalGraphBase):
         -----
         - names: iterable of names of recordings/sensors that will be plotted.
         - data types: dict with the recording names as keys, and the
-                        corresponding data types as values.
+                      corresponding data types as values.
+                      (dict can have more keys than those in 'names')
         - window_width: width (in seconds) of the displayed window
         - colors: optional dict of colors with keys 'fig', 'ax', and the
                     names of the recordings.
         """
         self.window_width = window_width
+        self.reference_time = None
 
         super().__init__(names=names, data_types=data_types, colors=colors)
 
-        self.previous_drawings = []
-        self.current_drawings = []
+        self.previous_data = self.create_empty_data()
+        self.current_data = self.create_empty_data()
 
-        self.reference_time = None
+    def create_empty_data(self):
+        data = {}
+        for name in self.names:
+            times = []
+            values = []
+            for _ in self.data_types[name]:
+                values.append([])
+            data[name] = {'times': times, 'values': values}
+        return data
 
     def create_axes(self):
         """Generate figure/axes as a function of input data types"""
@@ -75,11 +103,35 @@ class OscilloGraph(NumericalGraphBase):
 
     def format_graph(self):
         """Set colors, time formatting, etc."""
-        self.ylim = 0, 1
+        w = self.window_width
         for ax in self.axs.values():
-            ax.set_xlim((-0.1, self.window_width + 0.1))
-            ax.set_ylim(self.ylim)
+            ax.set_xlim((-0.05 * w, 1.05 * w))
             ax.grid()
+
+        # Initiate line object for each value of each sensor -----------------
+
+        self.lines = {}
+        self.lines_list = []
+
+        for name in self.names:
+
+            dtypes = self.data_types[name]
+            clrs = self.colors[name]
+            self.lines[name] = []
+
+            for dtype, clr in zip(dtypes, clrs):
+
+                # Plot data in correct axis depending on type
+                ax = self.axs[dtype]
+                line, = ax.plot([], [], '.', color=clr)
+
+                self.lines[name].append(line)
+                # Below, used for returning animated artists for blitting
+                self.lines_list.append(line)
+
+        # Also initiate line objects for traveling bars ----------------------
+
+        self.create_bars()
 
     def format_measurement(self, measurement):
         """How to move from measurements from the queue to data useful for plotting.
@@ -100,85 +152,66 @@ class OscilloGraph(NumericalGraphBase):
         """Create traveling bars"""
         self.bars = {}
         for dtype, ax in self.axs.items():
-            bar, = ax.plot((0, 0), self.ylim, '-', c='grey', linewidth=4)
+            bar = ax.axvline(0, linestyle='-', c='grey', linewidth=4)
             self.bars[dtype] = bar
 
     def refresh_windows(self):
         """What to do each time the bars exceeed window size"""
-
-        # Without this, memory keeps building up
-        # Tests: 230MB build-up in 5 min without, 14MB buildup with
-        for drawing in self.previous_drawings:
-            for pt in drawing['pts']:
-                pt.remove()
-
-        self.previous_drawings = self.current_drawings
-        self.current_drawings = []
+        self.previous_data = self.current_data
+        self.current_data = self.create_empty_data()
         self.reference_time += self.window_width
 
-    def plot(self, measurement):
-        """Generic plot method that chooses axes depending on data type.
-
-        measurement is an object from the data queue.
-        """
-        # The line below allows some sensors to avoid being plotted by reading
-        # None when called.
-        if measurement is None:
-            return
-
-        data = self.format_measurement(measurement)
-
-        name = data['name']
-        values = data['values']
+    def manage_reference_time(self, data):
+        """Define and update reference time if necessary"""
         t = data['time']
-
-        dtypes = self.data_types[name]  # all data types for this specific signal
-        clrs = self.colors[name]
-
         if self.reference_time is None:
             self.reference_time = t  # Take time of 1st data as time 0
-            self.create_bars()
-
         if t > self.reference_time + self.window_width:
             self.refresh_windows()
 
-        t_relative = t - self.reference_time
+    def update_current_data(self, data):
+        """Store measurement time and values in active data lists."""
 
-        pts = []
-        for value, dtype, clr in zip(values, dtypes, clrs):
-            ax = self.axs[dtype]  # plot data in correct axis depending on type
-            pt, = ax.plot(t_relative, value, '.', color=clr)
-            pts.append(pt)
+        name = data['name']
+        rel_time = data['time'] - self.reference_time
+        values = data['values']
 
-        drawing = {'time': t,
-                   'relative time': t_relative,
-                   'pts': pts}
+        self.current_data[name]['times'].append(rel_time)
+        for i, value in enumerate(values):
+            self.current_data[name]['values'][i].append(value)
 
-        self.current_drawings.append(drawing)
-        self.update_bars(dtypes=dtypes)
+    def update_lines(self):
+
+        # Keep only previous drawings after current bar position
+
+        for lines, previous_data, current_data in zip(self.lines.values(),
+                                                      self.previous_data.values(),
+                                                      self.current_data.values()):
+
+            prev_times = np.array(previous_data['times'], dtype=np.float64)
+            curr_times = np.array(current_data['times'], dtype=np.float64)
+
+            condition = (prev_times > self.relative_time)
+            times = np.concatenate((curr_times, prev_times[condition]))
+
+            for line, prev_values, curr_values in zip(lines,
+                                                      previous_data['values'],
+                                                      current_data['values']):
+
+                prev_vals = np.array(prev_values, dtype=np.float64)
+                curr_vals = np.array(curr_values, dtype=np.float64)
+                values = np.concatenate((curr_vals, prev_vals[condition]))
+
+                line.set_data(times, values)
 
     @property
     def animated_artists(self):
-        return self.active_pts + list(self.bars.values())
+        return self.lines_list + list(self.bars.values())
 
-    @property
-    def active_pts(self):
-
-        pts = []
-
-        for drawing in self.previous_drawings:
-            if drawing['time'] >= self.current_time - self.window_width:
-                pts.extend(drawing['pts'])
-
-        for drawing in self.current_drawings:
-            pts.extend(drawing['pts'])
-
-        return pts
-
-    def update_bars(self, dtypes):
+    def update_bars(self):
         t = self.relative_time
-        for dtype in dtypes:
-            self.bars[dtype].set_xdata((t, t))
+        for bar in self.bars.values():
+            bar.set_xdata(t)
 
     def run(self, q_plot, e_stop=None, e_close=None, e_graph=None,
             dt_graph=0.02, blit=True):

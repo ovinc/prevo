@@ -31,13 +31,11 @@ import tzlocal
 import numpy as np
 import matplotlib
 
-matplotlib.use('Qt5Agg')
-
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import oclock
 
-from .general import NumericalGraphBase, UpdateGraph
+from .general import NumericalGraphBase, UpdateGraphBase
 from ..record import SensorError
 
 # The two lines below have been added following a console FutureWarning:
@@ -63,6 +61,10 @@ local_timezone = tzlocal.get_localzone()
 # =============================== Main classes ===============================
 
 
+class UpdateGraph(UpdateGraphBase):
+    pass
+
+
 class NumericalGraph(NumericalGraphBase):
 
     def __init__(self, names, data_types, colors=None):
@@ -71,10 +73,11 @@ class NumericalGraph(NumericalGraphBase):
         Input
         -----
         - names: iterable of names of recordings/sensors that will be plotted.
-        - 'data types': dict with the recording names as keys, and the
-                        corresponding data types as values.
-        - 'colors': optional dict of colors with keys 'fig', 'ax', and the
-                    names of the recordings.
+        - data types: dict with the recording names as keys, and the
+                      corresponding data types as values.
+                      (dict can have more keys than those in 'names')
+        - colors: optional dict of colors with keys 'fig', 'ax', and the
+                  names of the recordings.
         """
         self.timezone = local_timezone
 
@@ -164,18 +167,12 @@ class NumericalGraph(NumericalGraphBase):
 
         return data
 
-    def plot(self, measurement):
+    def _plot(self, data):
         """Generic plot method that chooses axes depending on data type.
 
-        measurement is an object from the data queue.
+        data is a dict obtained from format_measurement(measurement)
+        where measurement is an object from the data queue.
         """
-        # The line below allows some sensors to avoid being plotted by reading
-        # None when called.
-        if measurement is None:
-            return
-
-        data = self.format_measurement(measurement)
-
         name = data['name']
         values = data['values']
         time = data['time']

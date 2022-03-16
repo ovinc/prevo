@@ -25,9 +25,6 @@ from abc import ABC, abstractmethod
 from queue import Empty
 
 # Non standard imports
-import matplotlib
-matplotlib.use('Qt5Agg')
-
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib import cm
@@ -41,7 +38,7 @@ class GraphBase(ABC):
 
     @abstractmethod
     def format_measurement(self, measurement):
-        """Transform measurement from the queue into something usable by plot()
+        """Transform measurement from the queue into something usable by manage_data()
 
         must return a dict with keys (at least):
         - 'name' (identifier of sensor)
@@ -52,13 +49,25 @@ class GraphBase(ABC):
         """
         pass
 
-    @abstractmethod
+    def _plot(self, data):
+        """Plot individual measurement on existing graph.
+
+        Uses output of self.format_measurement() (data)
+        """
+        pass
+
     def plot(self, measurement):
         """Plot individual measurement on existing graph.
 
         Uses output of self.format_measurement()
         """
-        pass
+        # The line below allows some sensors to avoid being plotted by reading
+        # None when called.
+        if measurement is None:
+            return
+
+        data = self.format_measurement(measurement)
+        self._plot(data)
 
     @property
     def animated_artists(self):
@@ -75,17 +84,18 @@ class NumericalGraphBase(GraphBase):
         -----
         - names: iterable of names of recordings/sensors that will be plotted.
         - data types: dict with the recording names as keys, and the
-                        corresponding data types as values.
+                      corresponding data types as values.
+                      (dict can have more keys than those in 'names')
         - colors: optional dict of colors with keys 'fig', 'ax', and the
                     names of the recordings.
         """
         self.names = names
-        self.data_types = data_types
+        self.data_types = {name: data_types[name] for name in self.names}
         self.colors = colors
 
         self.create_axes()
-        self.format_graph()
         self.set_colors()
+        self.format_graph()
         self.fig.tight_layout()
 
         # Create onclick callback to activate / deactivate autoscaling
@@ -140,7 +150,7 @@ class NumericalGraphBase(GraphBase):
         if not n_missing_colors:
             return
 
-        m = cm.get_cmap('tab20', n_missing_colors)
+        m = cm.get_cmap('tab10', n_missing_colors)
         i = 0
         for name in missing_color_names:
             dtypes = self.data_types[name]
@@ -159,7 +169,7 @@ class NumericalGraphBase(GraphBase):
         pass
 
 
-class UpdateGraph:
+class UpdateGraphBase:
 
     def __init__(self, graph, q_plot,
                  e_stop=None, e_close=None, e_graph=None,
@@ -206,6 +216,8 @@ class UpdateGraph:
                 # since figure is closed, e_close and e_graph are taken care of
                 # by the on_fig_close() function
 
+        self.before_getting_measurements()
+
         for queue in self.q_plot.values():
             while True:
                 try:
@@ -213,10 +225,34 @@ class UpdateGraph:
                 except Empty:
                     break
                 else:
-                    self.graph.plot(measurement)
+                    self.manage_measurement(measurement)
+
+        self.after_getting_measurements()
 
         if self.blit:
             return self.graph.animated_artists
+
+    def manage_measurement(self, measurement):
+        """What to do with inidividual measurements from the queue.
+
+        Can be subclassed if necessary
+        """
+        self.graph.plot(measurement)
+
+    def before_getting_measurements(self):
+        """Anything to do before measurements from queue have been processed.
+
+        Define in subclass (optional)
+        """
+        pass
+
+    def after_getting_measurements(self):
+        """Anything to do when all measurements from queue have been processed.
+
+        (i.e. manage_measurement() has been called for all elements in queue.)
+        Define in subclass (optional)
+        """
+        pass
 
     def run(self):
 
