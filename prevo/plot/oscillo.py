@@ -67,8 +67,8 @@ class OscilloGraph(NumericalGraphBase):
                        as values. Used to set ylims of graph initially.
                       (dict can have more keys than actual data types used)
         - window_width: width (in seconds) of the displayed window
-        - colors: optional dict of colors with keys 'fig', 'ax', and the
-                    names of the recordings.
+        - colors: optional dict of colors with keys 'fig', 'ax', 'bar' and the
+                  names of the recordings.
         """
         self.data_ranges = data_ranges
         self.window_width = window_width
@@ -77,6 +77,7 @@ class OscilloGraph(NumericalGraphBase):
         super().__init__(names=names, data_types=data_types, colors=colors)
 
         self.current_data = self.create_empty_data()
+        self.previous_data = self.create_empty_data()
 
     def create_empty_data(self):
         data = {}
@@ -179,7 +180,8 @@ class OscilloGraph(NumericalGraphBase):
         """Create traveling bars"""
         self.bars = {}
         for dtype, ax in self.axs.items():
-            bar = ax.axvline(0, linestyle='-', c='lightgrey', linewidth=4)
+            barcolor = self.colors.get('bar', 'silver')
+            bar = ax.axvline(0, linestyle='-', c=barcolor, linewidth=4)
             self.bars[dtype] = bar
 
     def refresh_windows(self):

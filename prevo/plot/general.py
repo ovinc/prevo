@@ -133,9 +133,11 @@ class NumericalGraphBase(GraphBase):
         if self.colors is None:
             self.colors = {}
         else:
-            self.fig.set_facecolor(self.colors['fig'])
+            figcolor = self.colors.get('fig', 'white')
+            self.fig.set_facecolor(figcolor)
             for ax in self.axs.values():
-                ax.set_facecolor(self.colors['ax'])
+                axcolor = self.colors.get('ax', 'white')
+                ax.set_facecolor(axcolor)
                 ax.grid()
 
         missing_color_names = []
