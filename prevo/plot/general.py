@@ -25,6 +25,7 @@ from abc import ABC, abstractmethod
 from queue import Empty
 
 # Non standard imports
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib import cm
@@ -53,14 +54,12 @@ class GraphBase(ABC):
         """Plot individual measurement on existing graph.
 
         Uses output of self.format_measurement() (data)
+        To subclass.
         """
         pass
 
     def plot(self, measurement):
-        """Plot individual measurement on existing graph.
-
-        Uses output of self.format_measurement()
-        """
+        """Wrapper around _plot()."""
         # The line below allows some sensors to avoid being plotted by reading
         # None when called.
         if measurement is None:
@@ -128,6 +127,32 @@ class NumericalGraphBase(GraphBase):
         else:
             pass
 
+    @staticmethod
+    def datalist_to_array(datalist):
+        """How to convert list of data to a numpy array.
+
+        Can be subclassed to adapt to applications.
+
+        For example, if the individual measurements stored in the data lists
+        are arrays instead of single values, consider using
+
+        return np.concatenate(datalist).
+        """
+        return np.array(datalist, dtype=np.float64)
+
+    @staticmethod
+    def timelist_to_array(timelist):
+        """How to convert list of times to a numpy array.
+
+        Can be subclassed to adapt to applications.
+
+        For example, if the individual measurements stored in the data lists
+        are arrays instead of single values, consider using
+
+        return np.concatenate(timelist)
+        """
+        return timelist
+
     def set_colors(self):
         """"Define fig/ax colors if supplied"""
         if self.colors is None:
@@ -161,6 +186,37 @@ class NumericalGraphBase(GraphBase):
                 colors.append(m.colors[i])
                 i += 1
             self.colors[name] = tuple(colors)
+
+    def create_lines(self):
+        """Create lines for each value of each sensor"""
+        self.lines = {}
+        self.lines_list = []
+
+        for name in self.names:
+
+            dtypes = self.data_types[name]
+            clrs = self.colors[name]
+            self.lines[name] = []
+
+            for dtype, clr in zip(dtypes, clrs):
+
+                # Plot data in correct axis depending on type
+                ax = self.axs[dtype]
+                line, = ax.plot([], [], '.-', color=clr)
+
+                self.lines[name].append(line)
+                # Below, used for returning animated artists for blitting
+                self.lines_list.append(line)
+
+    def create_empty_data(self):
+        data = {}
+        for name in self.names:
+            times = []
+            values = []
+            for _ in self.data_types[name]:
+                values.append([])
+            data[name] = {'times': times, 'values': values}
+        return data
 
     def create_axes(self):
         """To be defined in subclasses. Returns fig, axs"""
@@ -234,12 +290,23 @@ class UpdateGraphBase:
         if self.blit:
             return self.graph.animated_artists
 
-    def manage_measurement(self, measurement):
-        """What to do with inidividual measurements from the queue.
+    def _manage_data(self, data):
+        """What to do with individual measurements coming from live data.
 
-        Can be subclassed if necessary
+        (Measurement already formatted into data by format_measurement())
+        Define in subclass
         """
-        self.graph.plot(measurement)
+        pass
+
+    def manage_measurement(self, measurement):
+        """Wrapper around _manage_data()."""
+        # The line below allows some sensors to avoid being plotted by reading
+        # None when called.
+        if measurement is None:
+            return
+
+        data = self.graph.format_measurement(measurement)
+        self._manage_data(data)
 
     def before_getting_measurements(self):
         """Anything to do before measurements from queue have been processed.

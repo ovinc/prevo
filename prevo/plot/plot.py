@@ -62,7 +62,13 @@ local_timezone = tzlocal.get_localzone()
 
 
 class UpdateGraph(UpdateGraphBase):
-    pass
+
+    def _manage_data(self, data):
+        self.graph.update_current_data(data)
+
+    def after_getting_measurements(self):
+        self.graph.update_lines()
+        self.graph.update_time_formatting()
 
 
 class NumericalGraph(NumericalGraphBase):
@@ -82,6 +88,8 @@ class NumericalGraph(NumericalGraphBase):
         self.timezone = local_timezone
 
         super().__init__(names=names, data_types=data_types, colors=colors)
+
+        self.current_data = self.create_empty_data()  # For live updates
 
     def create_axes(self):
         """Generate figure/axes as a function of input data types"""
@@ -119,6 +127,13 @@ class NumericalGraph(NumericalGraphBase):
             self.locator[ax] = mdates.AutoDateLocator(tz=self.timezone)
             self.formatter[ax] = mdates.ConciseDateFormatter(self.locator,
                                                              tz=self.timezone)
+
+        # Create line objects for every sensor channel -----------------------
+        self.create_lines()
+
+    @property
+    def animated_artists(self):
+        return self.lines_list
 
     # ============================= Main methods =============================
 
@@ -167,8 +182,10 @@ class NumericalGraph(NumericalGraphBase):
 
         return data
 
+    # For static plots -------------------------------------------------------
+
     def _plot(self, data):
-        """Generic plot method that chooses axes depending on data type.
+        """Generic plot method for static data.
 
         data is a dict obtained from format_measurement(measurement)
         where measurement is an object from the data queue.
@@ -190,6 +207,41 @@ class NumericalGraph(NumericalGraphBase):
             ax = self.axs[dtype]
             ax.xaxis.set_major_locator(self.locator[ax])
             ax.xaxis.set_major_formatter(self.formatter[ax])
+
+    # For updated plots ------------------------------------------------------
+
+    def update_current_data(self, data):
+        """Store measurement time and values in active data lists."""
+
+        name = data['name']
+        values = data['values']
+        time = data['time']
+
+        self.current_data[name]['times'].append(time)
+        for i, value in enumerate(values):
+            self.current_data[name]['values'][i].append(value)
+
+    def update_lines(self):
+        """Update line positions with current data."""
+
+        for lines, current_data in zip(self.lines.values(),
+                                       self.current_data.values()):
+
+            times = self.timelist_to_array(current_data['times'])
+
+            for line, curr_values in zip(lines,
+                                         current_data['values']):
+
+                values = self.datalist_to_array(curr_values)
+                line.set_data(times, values)
+
+    def update_time_formatting(self):
+        """Use Concise Date Formatting for minimal space used on screen by time"""
+        for ax in self.axs.values():
+            ax.xaxis.set_major_locator(self.locator[ax])
+            ax.xaxis.set_major_formatter(self.formatter[ax])
+            ax.relim()
+            ax.autoscale_view(tight=True, scalex=True, scaley=True)
 
     def run(self, q_plot, e_stop=None, e_close=None, e_graph=None,
             dt_graph=0.1, blit=False):
@@ -300,13 +352,11 @@ class PlotUpdatedData:
         # e_stop two times, because we want a figure closure event to also
         # trigger stopping of the recording process here.
 
-        update_graph = UpdateGraph(self.graph,
-                                   q_plot=self.queues,
-                                   e_stop=self.e_stop,
-                                   e_close=self.e_stop,
-                                   e_graph=self.e_graph,
-                                   dt_graph=self.dt_graph)
-        update_graph.run()
+        self.graph.run(q_plot=self.queues,
+                       e_stop=self.e_stop,
+                       e_close=self.e_stop,
+                       e_graph=self.e_graph,
+                       dt_graph=self.dt_graph)
 
 
 class PlotLiveSensors(PlotUpdatedData):

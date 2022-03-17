@@ -33,20 +33,11 @@ from .general import NumericalGraphBase, UpdateGraphBase
 
 class UpdateGraph(UpdateGraphBase):
 
-    def manage_measurement(self, measurement):
-
-        # The line below allows some sensors to avoid being plotted by reading
-        # None when called.
-        if measurement is None:
-            return
-
-        data = self.graph.format_measurement(measurement)
-
+    def _manage_data(self, data):
         self.graph.manage_reference_time(data)
         self.graph.update_current_data(data)
 
     def after_getting_measurements(self):
-
         self.graph.update_lines()
         self.graph.update_bars()
 
@@ -78,16 +69,6 @@ class OscilloGraph(NumericalGraphBase):
 
         self.current_data = self.create_empty_data()
         self.previous_data = self.create_empty_data()
-
-    def create_empty_data(self):
-        data = {}
-        for name in self.names:
-            times = []
-            values = []
-            for _ in self.data_types[name]:
-                values.append([])
-            data[name] = {'times': times, 'values': values}
-        return data
 
     def create_axes(self):
         """Generate figure/axes as a function of input data types"""
@@ -142,40 +123,6 @@ class OscilloGraph(NumericalGraphBase):
     def relative_time(self):
         return self.current_time - self.reference_time
 
-    @staticmethod
-    def datalist_to_array(datalist):
-        """How to convert list of data to a numpy array.
-
-        Can be subclassed to adapt to applications.
-
-        For example, if the individual measurements stored in the data lists
-        are arrays instead of single values, consider using
-
-        return np.concatenate(datalist).
-        """
-        return np.array(datalist, dtype=np.float64)
-
-    def create_lines(self):
-        """Create lines for each value of each sensor"""
-        self.lines = {}
-        self.lines_list = []
-
-        for name in self.names:
-
-            dtypes = self.data_types[name]
-            clrs = self.colors[name]
-            self.lines[name] = []
-
-            for dtype, clr in zip(dtypes, clrs):
-
-                # Plot data in correct axis depending on type
-                ax = self.axs[dtype]
-                line, = ax.plot([], [], '.-', color=clr)
-
-                self.lines[name].append(line)
-                # Below, used for returning animated artists for blitting
-                self.lines_list.append(line)
-
     def create_bars(self):
         """Create traveling bars"""
         self.bars = {}
@@ -210,6 +157,7 @@ class OscilloGraph(NumericalGraphBase):
             self.current_data[name]['values'][i].append(value)
 
     def update_lines(self):
+        """Update line positions with current data."""
 
         # Keep only previous drawings after current bar position
 
