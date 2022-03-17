@@ -141,6 +141,19 @@ class OscilloGraph(NumericalGraphBase):
     def relative_time(self):
         return self.current_time - self.reference_time
 
+    @staticmethod
+    def datalist_to_array(datalist):
+        """How to convert list of data to a numpy array.
+
+        Can be subclassed to adapt to applications.
+
+        For example, if the individual measurements stored in the data lists
+        are arrays instead of single values, consider using
+
+        return np.concatenate(datalist).
+        """
+        return np.array(datalist, dtype=np.float64)
+
     def create_lines(self):
         """Create lines for each value of each sensor"""
         self.lines = {}
@@ -202,8 +215,8 @@ class OscilloGraph(NumericalGraphBase):
                                                       self.previous_data.values(),
                                                       self.current_data.values()):
 
-            prev_times = np.array(previous_data['times'], dtype=np.float64)
-            curr_times = np.array(current_data['times'], dtype=np.float64)
+            prev_times = self.datalist_to_array(previous_data['times'])
+            curr_times = self.datalist_to_array(current_data['times'])
 
             condition = (prev_times > self.relative_time)
             times = np.concatenate((curr_times, prev_times[condition]))
@@ -212,8 +225,8 @@ class OscilloGraph(NumericalGraphBase):
                                                       previous_data['values'],
                                                       current_data['values']):
 
-                prev_vals = np.array(prev_values, dtype=np.float64)
-                curr_vals = np.array(curr_values, dtype=np.float64)
+                prev_vals = self.datalist_to_array(prev_values)
+                curr_vals = self.datalist_to_array(curr_values)
                 values = np.concatenate((curr_vals, prev_vals[condition]))
 
                 line.set_data(times, values)
