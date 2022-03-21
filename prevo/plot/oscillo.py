@@ -198,21 +198,23 @@ class OscilloGraph(NumericalGraphBase):
                                                       self.previous_data.values(),
                                                       self.current_data.values()):
 
-            prev_times = self.timelist_to_array(previous_data['times'])
-            curr_times = self.timelist_to_array(current_data['times'])
+            if current_data['times']:  # Avoids problems if no data stored yet
 
-            condition = (prev_times > self.relative_time)
-            times = np.concatenate((curr_times, prev_times[condition]))
+                prev_times = self.timelist_to_array(previous_data['times'])
+                curr_times = self.timelist_to_array(current_data['times'])
 
-            for line, prev_values, curr_values in zip(lines,
-                                                      previous_data['values'],
-                                                      current_data['values']):
+                condition = (prev_times > self.relative_time)
+                times = np.concatenate((curr_times, prev_times[condition]))
 
-                prev_vals = self.datalist_to_array(prev_values)
-                curr_vals = self.datalist_to_array(curr_values)
-                values = np.concatenate((curr_vals, prev_vals[condition]))
+                for line, prev_values, curr_values in zip(lines,
+                                                          previous_data['values'],
+                                                          current_data['values']):
 
-                line.set_data(times, values)
+                    prev_vals = self.datalist_to_array(prev_values)
+                    curr_vals = self.datalist_to_array(curr_values)
+                    values = np.concatenate((curr_vals, prev_vals[condition]))
+
+                    line.set_data(times, values)
 
     def update_bars(self):
         t = self.relative_time

@@ -244,16 +244,15 @@ class NumericalGraph(NumericalGraphBase):
         for lines, current_data in zip(self.lines.values(),
                                        self.current_data.values()):
 
-            if not current_data['times']:  # No data yet
-                return
+            if current_data['times']:  # Avoids problems if no data stored yet
 
-            times = self.timelist_to_array(current_data['times'])
+                times = self.timelist_to_array(current_data['times'])
 
-            for line, curr_values in zip(lines,
-                                         current_data['values']):
+                for line, curr_values in zip(lines,
+                                             current_data['values']):
 
-                values = self.datalist_to_array(curr_values)
-                line.set_data(times, values)
+                    values = self.datalist_to_array(curr_values)
+                    line.set_data(times, values)
 
     def update_time_formatting(self):
         """Use Concise Date Formatting for minimal space used on screen by time"""
