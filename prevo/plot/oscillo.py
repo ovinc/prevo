@@ -44,7 +44,14 @@ class UpdateGraph(UpdateGraphBase):
 
 class OscilloGraph(NumericalGraphBase):
 
-    def __init__(self, names, data_types, data_ranges, window_width=10, colors=None):
+    def __init__(self,
+                 names,
+                 data_types,
+                 data_ranges,
+                 window_width=10,
+                 colors=None,
+                 linestyle='.-',
+                 data_as_array=False):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
@@ -60,12 +67,20 @@ class OscilloGraph(NumericalGraphBase):
         - window_width: width (in seconds) of the displayed window
         - colors: optional dict of colors with keys 'fig', 'ax', 'bar' and the
                   names of the recordings.
+        - linestyle: Matplotlib linestyle (e.g. '.', '-', '.-' etc.)
+        - data_as_array: if sensors return arrays of values for different times
+                         instead of values for a single time, put this
+                         bool as True (default False)
         """
         self.data_ranges = data_ranges
         self.window_width = window_width
         self.reference_time = None
 
-        super().__init__(names=names, data_types=data_types, colors=colors)
+        super().__init__(names=names,
+                         data_types=data_types,
+                         colors=colors,
+                         linestyle=linestyle,
+                         data_as_array=data_as_array)
 
         self.current_data = self.create_empty_data()
         self.previous_data = self.create_empty_data()
@@ -114,6 +129,24 @@ class OscilloGraph(NumericalGraphBase):
     def on_click():
         """Here turn off autoscale, which can cause problems with blitting."""
         pass
+
+    def _list_of_single_values_to_array(self, datalist):
+        """How to convert list of single values to a numpy array.
+
+        This is to transform measurements stored in self.current_values
+        into an array manageable by matplotlib for plotting.
+
+        Can be subclassed to adapt to applications."""
+        return np.array(datalist, dtype=np.float64)
+
+    def _list_of_single_times_to_array(self, timelist):
+        """How to convert list of single times to a numpy array.
+
+        This is to transform measurements stored in self.current_values
+        into an array manageable by matplotlib for plotting.
+
+        Can be subclassed to adapt to applications."""
+        return np.array(timelist, dtype=np.float64)
 
     @property
     def current_time(self):
@@ -165,8 +198,8 @@ class OscilloGraph(NumericalGraphBase):
                                                       self.previous_data.values(),
                                                       self.current_data.values()):
 
-            prev_times = self.datalist_to_array(previous_data['times'])
-            curr_times = self.datalist_to_array(current_data['times'])
+            prev_times = self.timelist_to_array(previous_data['times'])
+            curr_times = self.timelist_to_array(current_data['times'])
 
             condition = (prev_times > self.relative_time)
             times = np.concatenate((curr_times, prev_times[condition]))

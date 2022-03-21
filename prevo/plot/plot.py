@@ -29,7 +29,6 @@ from pathlib import Path
 # Non standard imports
 import tzlocal
 import numpy as np
-import matplotlib
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -73,7 +72,13 @@ class UpdateGraph(UpdateGraphBase):
 
 class NumericalGraph(NumericalGraphBase):
 
-    def __init__(self, names, data_types, colors=None):
+    def __init__(self,
+                 names,
+                 data_types,
+                 colors=None,
+                 linestyle='.',
+                 data_as_array=False,
+                 time_conversion='datetime'):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
@@ -84,10 +89,28 @@ class NumericalGraph(NumericalGraphBase):
                       (dict can have more keys than those in 'names')
         - colors: optional dict of colors with keys 'fig', 'ax', and the
                   names of the recordings.
+        - linestyle: Matplotlib linestyle (e.g. '.', '-', '.-' etc.)
+        - data_as_array: if sensors return arrays of values for different times
+                         instead of values for a single time, put this
+                         bool as True (default False)
+        - time_conversion: how to convert from unix time to datetime;
+                           possible values: 'datetime', 'numpy', 'pandas'
+                           ('datetime' and 'pandas' are timezone aware
+                            'numpy is not)
         """
         self.timezone = local_timezone
 
-        super().__init__(names=names, data_types=data_types, colors=colors)
+        time_converters = {'datetime': self._to_datetime_datetime,
+                           'numpy': self._to_datetime_numpy,
+                           'pandas': self._to_datetime_pandas}
+
+        self.time_converter = time_converters[time_conversion]
+
+        super().__init__(names=names,
+                         data_types=data_types,
+                         colors=colors,
+                         linestyle=linestyle,
+                         data_as_array=data_as_array)
 
         self.current_data = self.create_empty_data()  # For live updates
 
@@ -137,6 +160,10 @@ class NumericalGraph(NumericalGraphBase):
 
     # ============================= Main methods =============================
 
+    def _to_datetime_datetime(self, unix_time):
+        """Transform single value of unix time into timezone-aware datetime."""
+        return datetime.fromtimestamp(unix_time, self.timezone)
+
     @staticmethod
     def _to_datetime_numpy(unix_times):
         """Transform iterable / array of unix times into datetimes.
@@ -146,8 +173,7 @@ class NumericalGraph(NumericalGraphBase):
         """
         return (np.array(unix_times) * 1e9).astype('datetime64[ns]')
 
-    @staticmethod
-    def _to_datetime_pandas(unix_times):
+    def _to_datetime_pandas(self, unix_times):
         """Transform iterable / array of datetimes into pandas Series.
 
         Note: here, the datetimes are in local timezone format, but this is
@@ -156,7 +182,7 @@ class NumericalGraph(NumericalGraphBase):
         # For some reason, it's faster (and more precise) to convert to numpy first
         np_times = (np.array(unix_times) * 1e9).astype('datetime64[ns]')
         pd_times = pd.Series(np_times)
-        return pd.to_datetime(pd_times, utc=True).dt.tz_convert(local_timezone)
+        return pd.to_datetime(pd_times, utc=True).dt.tz_convert(self.timezone)
 
     def format_measurement(self, measurement):
         """Transform measurement from the queue into something usable by plot()
@@ -170,16 +196,7 @@ class NumericalGraph(NumericalGraphBase):
         """
         data = {key: measurement[key] for key in ('name', 'values')}
         t_unix = measurement['time (unix)']
-        try:
-            # works if time is a single value (int or float)
-            data['time'] = datetime.fromtimestamp(t_unix, local_timezone)
-        except TypeError:
-            # works if time is an array
-            if pandas_available:
-                data['time'] = self._to_datetime_pandas(t_unix)
-            else:
-                data['time'] = self._to_datetime_numpy(t_unix)
-
+        data['time'] = self.time_converter(t_unix)
         return data
 
     # For static plots -------------------------------------------------------
@@ -199,7 +216,7 @@ class NumericalGraph(NumericalGraphBase):
 
         for value, dtype, clr in zip(values, dtypes, clrs):
             ax = self.axs[dtype]  # plot data in correct axis depending on type
-            ax.plot(time, value, '.', color=clr)
+            ax.plot(time, value, self.linestyle, color=clr)
 
         # Use Concise Date Formatting for minimal space used on screen by time
         different_types = set(dtypes)
@@ -227,6 +244,9 @@ class NumericalGraph(NumericalGraphBase):
         for lines, current_data in zip(self.lines.values(),
                                        self.current_data.values()):
 
+            if not current_data['times']:  # No data yet
+                return
+
             times = self.timelist_to_array(current_data['times'])
 
             for line, curr_values in zip(lines,
@@ -240,6 +260,7 @@ class NumericalGraph(NumericalGraphBase):
         for ax in self.axs.values():
             ax.xaxis.set_major_locator(self.locator[ax])
             ax.xaxis.set_major_formatter(self.formatter[ax])
+            # Lines below are needed for autoscaling to work
             ax.relim()
             ax.autoscale_view(tight=True, scalex=True, scaley=True)
 

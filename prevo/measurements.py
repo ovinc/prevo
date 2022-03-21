@@ -95,7 +95,7 @@ class SavedCsvData(CsvFile, SavedDataBase):
         """
         measurement = {}
         measurement['name'] = self.name
-        measurement['time (unix)'] = self.data['time (unix)']
+        measurement['time (unix)'] = self.data['time (unix)'].values
         # remove time columns
-        measurement['values'] = [column for _, column in self.data.iloc[:, 2:].items()]
+        measurement['values'] = [column.values for _, column in self.data.iloc[:, 2:].items()]
         return measurement

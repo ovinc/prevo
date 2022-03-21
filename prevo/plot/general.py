@@ -23,6 +23,7 @@
 # Standard library imports
 from abc import ABC, abstractmethod
 from queue import Empty
+from time import time
 
 # Non standard imports
 import numpy as np
@@ -76,7 +77,12 @@ class GraphBase(ABC):
 
 class NumericalGraphBase(GraphBase):
 
-    def __init__(self, names, data_types, colors=None):
+    def __init__(self,
+                 names,
+                 data_types,
+                 colors=None,
+                 linestyle='.',
+                 data_as_array=False):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
@@ -87,10 +93,22 @@ class NumericalGraphBase(GraphBase):
                       (dict can have more keys than those in 'names')
         - colors: optional dict of colors with keys 'fig', 'ax', and the
                     names of the recordings.
+        - linestyle: Matplotlib linestyle (e.g. '.', '-', '.-' etc.)
+        - data_as_array: if sensors return arrays of values for different times
+                         instead of values for a single time, put this
+                         bool as True (default False)
         """
         self.names = names
         self.data_types = {name: data_types[name] for name in self.names}
         self.colors = colors
+        self.linestyle = linestyle
+
+        if data_as_array:
+            self.datalist_to_array = self._list_of_value_arrays_to_array
+            self.timelist_to_array = self._list_of_time_arrays_to_array
+        else:
+            self.datalist_to_array = self._list_of_single_values_to_array
+            self.timelist_to_array = self._list_of_single_times_to_array
 
         self.create_axes()
         self.set_colors()
@@ -127,31 +145,41 @@ class NumericalGraphBase(GraphBase):
         else:
             pass
 
-    @staticmethod
-    def datalist_to_array(datalist):
-        """How to convert list of data to a numpy array.
+    def _list_of_single_values_to_array(self, datalist):
+        """How to convert list of single values to a numpy array.
 
-        Can be subclassed to adapt to applications.
+        This is to transform measurements stored in self.current_values
+        into an array manageable by matplotlib for plotting.
 
-        For example, if the individual measurements stored in the data lists
-        are arrays instead of single values, consider using
+        Can be subclassed to adapt to applications."""
+        return datalist
 
-        return np.concatenate(datalist).
-        """
-        return np.array(datalist, dtype=np.float64)
+    def _list_of_single_times_to_array(self, timelist):
+        """How to convert list of single times to a numpy array.
 
-    @staticmethod
-    def timelist_to_array(timelist):
-        """How to convert list of times to a numpy array.
+        This is to transform measurements stored in self.current_values
+        into an array manageable by matplotlib for plotting.
 
-        Can be subclassed to adapt to applications.
-
-        For example, if the individual measurements stored in the data lists
-        are arrays instead of single values, consider using
-
-        return np.concatenate(timelist)
-        """
+        Can be subclassed to adapt to applications."""
         return timelist
+
+    def _list_of_value_arrays_to_array(self, datalist):
+        """How to convert list of arrays of values to a numpy array.
+
+        This is to transform measurements stored in self.current_values
+        into an array manageable by matplotlib for plotting.
+
+        Can be subclassed to adapt to applications."""
+        return np.concatenate(datalist)
+
+    def _list_of_time_arrays_to_array(self, timelist):
+        """How to convert list array of times to a numpy array.
+
+        This is to transform measurements stored in self.current_values
+        into an array manageable by matplotlib for plotting.
+
+        Can be subclassed to adapt to applications."""
+        return np.concatenate(timelist)
 
     def set_colors(self):
         """"Define fig/ax colors if supplied"""
@@ -202,7 +230,7 @@ class NumericalGraphBase(GraphBase):
 
                 # Plot data in correct axis depending on type
                 ax = self.axs[dtype]
-                line, = ax.plot([], [], '.-', color=clr)
+                line, = ax.plot([], [], self.linestyle, color=clr)
 
                 self.lines[name].append(line)
                 # Below, used for returning animated artists for blitting
