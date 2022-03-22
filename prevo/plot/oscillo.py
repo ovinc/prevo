@@ -217,7 +217,7 @@ class OscilloGraph(NumericalGraphBase):
                     line.set_data(times, values)
 
     def update_bars(self):
-        if self.relative_time:  # Avoids problems if no data arrived yet
+        if self.reference_time:  # Avoids problems if no data arrived yet
             t = self.relative_time
             for bar in self.bars.values():
                 bar.set_xdata(t)
