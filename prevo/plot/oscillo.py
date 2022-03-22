@@ -217,9 +217,10 @@ class OscilloGraph(NumericalGraphBase):
                     line.set_data(times, values)
 
     def update_bars(self):
-        t = self.relative_time
-        for bar in self.bars.values():
-            bar.set_xdata(t)
+        if self.relative_time:  # Avoids problems if no data arrived yet
+            t = self.relative_time
+            for bar in self.bars.values():
+                bar.set_xdata(t)
 
     @property
     def animated_artists(self):
