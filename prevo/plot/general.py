@@ -98,19 +98,32 @@ class NumericalGraphBase(GraphBase):
         - data_as_array: if sensors return arrays of values for different times
                          instead of values for a single time, put this
                          bool as True (default False).
+                         NOTE: data_as array can also be a dict of bools
+                         with names as keys if some sensors come as arrays
+                         and some not.
         """
         self.names = names
         self.data_types = {name: data_types[name] for name in self.names}
         self.colors = colors
         self.linestyle = linestyle
-        self.data_as_array = data_as_array
 
-        if self.data_as_array:
-            self.datalist_to_array = self._list_of_value_arrays_to_array
-            self.timelist_to_array = self._list_of_time_arrays_to_array
+        try:
+            data_as_array.get   # no error if dict
+        except AttributeError:  # it's a bool: put info for all sensors
+            self.data_as_array = {name: data_as_array for name in self.names}
         else:
-            self.datalist_to_array = self._list_of_single_values_to_array
-            self.timelist_to_array = self._list_of_single_times_to_array
+            self.data_as_array = data_as_array
+
+        self.datalist_to_array = {}
+        self.timelist_to_array = {}
+
+        for name, data_as_array in self.data_as_array.items():
+            if data_as_array:
+                self.datalist_to_array[name] = self._list_of_value_arrays_to_array
+                self.timelist_to_array[name] = self._list_of_time_arrays_to_array
+            else:
+                self.datalist_to_array[name] = self._list_of_single_values_to_array
+                self.timelist_to_array[name] = self._list_of_single_times_to_array
 
         self.create_axes()
         self.set_colors()

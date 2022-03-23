@@ -179,7 +179,9 @@ class OscilloGraph(NumericalGraphBase):
     def get_time_boundaries(self, data):
         """Subclass if necessary."""
         t = data['time (unix)']
-        if self.data_as_array:
+        name = data['name']
+
+        if self.data_as_array[name]:
             return t[0], t[-1]
         else:
             return t, t
@@ -244,12 +246,12 @@ class OscilloGraph(NumericalGraphBase):
                 continue
 
             if curr_exists:
-                curr_times = self.timelist_to_array(current_data['times'])
+                curr_times = self.timelist_to_array[name](current_data['times'])
                 curr_rel_times = curr_times - self.reference_time
                 rel_times.append(curr_rel_times)
 
             if prev_exists:
-                prev_times = self.timelist_to_array(previous_data['times'])
+                prev_times = self.timelist_to_array[name](previous_data['times'])
                 prev_condition = (prev_times + self.window_width > self.current_time)
                 prev_rel_times = prev_times[prev_condition] - self.reference_time + self.window_width
                 rel_times.append(prev_rel_times)
@@ -263,11 +265,11 @@ class OscilloGraph(NumericalGraphBase):
                 vals = []
 
                 if curr_exists:
-                    curr_vals = self.datalist_to_array(curr_values)
+                    curr_vals = self.datalist_to_array[name](curr_values)
                     vals.append(curr_vals)
 
                 if prev_exists:
-                    prev_vals = self.datalist_to_array(prev_values)
+                    prev_vals = self.datalist_to_array[name](prev_values)
                     vals.append(prev_vals[prev_condition])
 
                 values_array = np.concatenate(vals)

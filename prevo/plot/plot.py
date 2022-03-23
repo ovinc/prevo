@@ -243,17 +243,19 @@ class NumericalGraph(NumericalGraphBase):
     def update_lines(self):
         """Update line positions with current data."""
 
-        for lines, current_data in zip(self.lines.values(),
-                                       self.current_data.values()):
+        for name in self.names:
+
+            lines = self.lines[name]
+            current_data = self.current_data[name]
 
             if current_data['times']:  # Avoids problems if no data stored yet
 
-                times = self.timelist_to_array(current_data['times'])
+                times = self.timelist_to_array[name](current_data['times'])
 
                 for line, curr_values in zip(lines,
                                              current_data['values']):
 
-                    values = self.datalist_to_array(curr_values)
+                    values = self.datalist_to_array[name](curr_values)
                     line.set_data(times, values)
 
     def update_time_formatting(self):
