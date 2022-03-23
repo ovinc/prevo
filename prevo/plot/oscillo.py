@@ -93,6 +93,9 @@ class OscilloGraph(NumericalGraphBase):
         - data_as_array: if sensors return arrays of values for different times
                          instead of values for a single time, put this
                          bool as True (default False)
+                         NOTE: data_as array can also be a dict of bools
+                         with names as keys if some sensors come as arrays
+                         and some not.
         """
         self.data_ranges = data_ranges
         self.window_width = window_width

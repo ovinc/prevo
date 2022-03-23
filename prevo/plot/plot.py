@@ -78,7 +78,7 @@ class NumericalGraph(NumericalGraphBase):
                  colors=None,
                  linestyle='.',
                  data_as_array=False,
-                 time_conversion='datetime'):
+                 time_conversion='numpy'):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
@@ -93,24 +93,27 @@ class NumericalGraph(NumericalGraphBase):
         - data_as_array: if sensors return arrays of values for different times
                          instead of values for a single time, put this
                          bool as True (default False)
-        - time_conversion: how to convert from unix time to datetime;
-                           possible values: 'datetime', 'numpy', 'pandas'
-                           ('datetime' and 'pandas' are timezone aware
-                            'numpy is not)
+        - time_conversion: how to convert from unix time to datetime for arrays;
+                           possible values: 'numpy', 'pandas'.
         """
         self.timezone = local_timezone
-
-        time_converters = {'datetime': self._to_datetime_datetime,
-                           'numpy': self._to_datetime_numpy,
-                           'pandas': self._to_datetime_pandas}
-
-        self.time_converter = time_converters[time_conversion]
 
         super().__init__(names=names,
                          data_types=data_types,
                          colors=colors,
                          linestyle=linestyle,
                          data_as_array=data_as_array)
+
+        time_converters = {'datetime': self._to_datetime_datetime,
+                           'numpy': self._to_datetime_numpy,
+                           'pandas': self._to_datetime_pandas}
+
+        self.time_converters = {}
+        for name in self.names:
+            if self.data_as_array[name]:
+                self.time_converters[name] = time_converters[time_conversion]
+            else:
+                self.time_converters[name] = time_converters['datetime']
 
         self.current_data = self.create_empty_data()  # For live updates
 
@@ -197,8 +200,12 @@ class NumericalGraph(NumericalGraphBase):
         Subclass to adapt to applications.
         """
         data = {key: measurement[key] for key in ('name', 'values')}
+
+        name = measurement['name']
         t_unix = measurement['time (unix)']
-        data['time'] = self.time_converter(t_unix)
+
+        data['time'] = self.time_converters[name](t_unix)
+
         return data
 
     # For static plots -------------------------------------------------------
