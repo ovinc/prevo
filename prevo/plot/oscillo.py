@@ -60,8 +60,7 @@ class UpdateGraph(UpdateGraphBase):
     def after_getting_measurements(self):
         self.graph.update_lines()
         self.graph.update_bars()
-        trel = self.graph.relative_time
-        if trel and (trel > self.graph.window_width):
+        if self.graph.reference_time and (self.relative_time > self.graph.window_width):
             self.graph.wrap()
 
 
