@@ -23,7 +23,6 @@
 # Standard library imports
 from abc import ABC, abstractmethod
 from queue import Empty
-from time import time
 
 # Non standard imports
 import numpy as np
@@ -42,12 +41,14 @@ class GraphBase(ABC):
     def format_measurement(self, measurement):
         """Transform measurement from the queue into something usable by manage_data()
 
-        must return a dict with keys (at least):
-        - 'name' (identifier of sensor)
-        - 'values' (iterable of numerical values read by sensor)
-        - 'time' (time)
+        Can be subclassed to adapt to various applications.
+        Here, assumes data is incoming in the form of a dictionary with at
+        least keys:
+        - 'name' (str, identifier of sensor)
+        - 'time (unix)' (floar or array of floats)
+        - 'values' (iterable of values, or iterable of arrays of values)
 
-        Subclass to adapt to your application.
+        Subclass to adapt to applications.
         """
         pass
 
@@ -96,14 +97,15 @@ class NumericalGraphBase(GraphBase):
         - linestyle: Matplotlib linestyle (e.g. '.', '-', '.-' etc.)
         - data_as_array: if sensors return arrays of values for different times
                          instead of values for a single time, put this
-                         bool as True (default False)
+                         bool as True (default False).
         """
         self.names = names
         self.data_types = {name: data_types[name] for name in self.names}
         self.colors = colors
         self.linestyle = linestyle
+        self.data_as_array = data_as_array
 
-        if data_as_array:
+        if self.data_as_array:
             self.datalist_to_array = self._list_of_value_arrays_to_array
             self.timelist_to_array = self._list_of_time_arrays_to_array
         else:
@@ -269,7 +271,7 @@ class UpdateGraphBase:
         - e_stop (optional): external stop request, closes the figure if set
         - e_close (optional) is set when the figure has been closed
         - e_graph (optional) is set when the graph is activated
-        - dt graph: time interval to update the graph
+        - dt_graph: time interval to update the graph
         - blit: if True, use blitting to speed up the matplotlib animation
 
         Attention, if the figure is closed, the e_close event is triggered so

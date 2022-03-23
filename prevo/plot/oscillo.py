@@ -115,14 +115,16 @@ class OscilloGraph(NumericalGraphBase):
         self.create_bars()
 
     def format_measurement(self, measurement):
-        """How to move from measurements from the queue to data useful for plotting.
+        """Transform measurement from the queue into something usable by manage_data()
 
         Can be subclassed to adapt to various applications.
         Here, assumes data is incoming in the form of a dictionary with at
         least keys:
-        - 'name'
-        - 'time (unix)'
-        - 'values'
+        - 'name' (str, identifier of sensor)
+        - 'time (unix)' (float or array of floats)
+        - 'values' (iterable of values, or iterable of arrays of values)
+
+        Subclass to adapt to applications.
         """
         return measurement
 
@@ -170,12 +172,22 @@ class OscilloGraph(NumericalGraphBase):
         self.current_data = self.create_empty_data()
         self.reference_time += self.window_width
 
+    def get_time_boundaries(self, data):
+        """Subclass if necessary."""
+        t = data['time (unix)']
+        if self.data_as_array:
+            return t[0], t[-1]
+        else:
+            return t, t
+
     def manage_reference_time(self, data):
         """Define and update reference time if necessary"""
-        t = data['time (unix)']
+        tmin, tmax = self.get_time_boundaries(data)
+
         if self.reference_time is None:
-            self.reference_time = t  # Take time of 1st data as time 0
-        if t > self.reference_time + self.window_width:
+            self.reference_time = tmin   # Take time of 1st data as time 0
+
+        if tmax > self.reference_time + self.window_width:
             self.refresh_windows()
 
     def update_current_data(self, data):
@@ -200,19 +212,27 @@ class OscilloGraph(NumericalGraphBase):
 
             if current_data['times']:  # Avoids problems if no data stored yet
 
-                prev_times = self.timelist_to_array(previous_data['times'])
                 curr_times = self.timelist_to_array(current_data['times'])
+                prev_exists = bool(previous_data['times'])
 
-                condition = (prev_times > self.relative_time)
-                times = np.concatenate((curr_times, prev_times[condition]))
+                if prev_exists:
+                    prev_times = self.timelist_to_array(previous_data['times'])
+                    condition = (prev_times > self.relative_time)
+                    times = np.concatenate((curr_times, prev_times[condition]))
+                else:
+                    times = curr_times
 
                 for line, prev_values, curr_values in zip(lines,
                                                           previous_data['values'],
                                                           current_data['values']):
 
-                    prev_vals = self.datalist_to_array(prev_values)
                     curr_vals = self.datalist_to_array(curr_values)
-                    values = np.concatenate((curr_vals, prev_vals[condition]))
+
+                    if prev_exists:
+                        prev_vals = self.datalist_to_array(prev_values)
+                        values = np.concatenate((curr_vals, prev_vals[condition]))
+                    else:
+                        values = curr_vals
 
                     line.set_data(times, values)
 
@@ -224,7 +244,8 @@ class OscilloGraph(NumericalGraphBase):
 
     @property
     def animated_artists(self):
-        return self.lines_list + list(self.bars.values())
+        artists = self.lines_list + list(self.bars.values())
+        return artists
 
     def run(self, q_plot, e_stop=None, e_close=None, e_graph=None,
             dt_graph=0.02, blit=True):

@@ -185,14 +185,16 @@ class NumericalGraph(NumericalGraphBase):
         return pd.to_datetime(pd_times, utc=True).dt.tz_convert(self.timezone)
 
     def format_measurement(self, measurement):
-        """Transform measurement from the queue into something usable by plot()
+        """Transform measurement from the queue into something usable by manage_data()
 
-        must return a dict with keys (at least):
-        - 'name' (identifier of sensor)
-        - 'values' (iterable of numerical values read by sensor)
-        - 'time' (time)
+        Can be subclassed to adapt to various applications.
+        Here, assumes data is incoming in the form of a dictionary with at
+        least keys:
+        - 'name' (str, identifier of sensor)
+        - 'time (unix)' (floar or array of floats)
+        - 'values' (iterable of values, or iterable of arrays of values)
 
-        Subclass to adapt to your application.
+        Subclass to adapt to applications.
         """
         data = {key: measurement[key] for key in ('name', 'values')}
         t_unix = measurement['time (unix)']
