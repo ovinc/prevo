@@ -34,14 +34,34 @@ from .general import NumericalGraphBase, UpdateGraphBase
 class UpdateGraph(UpdateGraphBase):
 
     def _manage_data(self, data):
-        self.graph.manage_reference_time(data)
-        self.graph.update_current_data(data)
+
+        tmin, tmax = self.graph.get_time_boundaries(data)
+
+        if self.graph.reference_time is None:
+            self.graph.reference_time = tmin   # Take time of 1st data as time 0
+
+        self.graph.update_stored_data(data=data,
+                                      stored_data=self.graph.current_data)
+
+        # In case measurement arrives late after window has already refreshed,
+        # duplicate it to previous data so that it is remains visible
+        # This is particularly useful for data arriving as arrays; in which
+        # case the array will be duplicated to appear both at the beginning
+        # and end of the window when the times in the arrays span values
+        # across the window wrapping time.
+        if tmin < self.graph.reference_time:
+            self.graph.update_stored_data(data=data,
+                                          stored_data=self.graph.previous_data)
+
+        # There is no need to do the same for 'future' points that would arrive
+        # with tmax > reference_time + window_size, because in
+        # principle all data arriving is from the past or present.
 
     def after_getting_measurements(self):
         self.graph.update_lines()
         self.graph.update_bars()
         if self.graph.relative_time > self.graph.window_width:
-            self.graph.refresh()
+            self.graph.wrap()
 
 
 class OscilloGraph(NumericalGraphBase):
@@ -52,7 +72,7 @@ class OscilloGraph(NumericalGraphBase):
                  data_ranges,
                  window_width=10,
                  colors=None,
-                 linestyle='.-',
+                 linestyle='.',
                  data_as_array=False):
         """Initiate figures and axes for data plot as a function of asked types.
 
@@ -111,7 +131,7 @@ class OscilloGraph(NumericalGraphBase):
 
         w = self.window_width
         for dtype, ax in self.axs.items():
-            ax.set_xlim((-0.01 * w, 1.01 * w))
+            ax.set_xlim((-0.001 * w, 1.001 * w))
             ax.set_ylim(self.data_ranges[dtype])
             ax.grid()
 
@@ -129,11 +149,11 @@ class OscilloGraph(NumericalGraphBase):
     # =============== Methods overriden from the parent class ================
 
     def _list_of_single_values_to_array(self, datalist):
-        """To be able to filter on time condition"""
+        """To be able to filter on time condition and concatenate"""
         return np.array(datalist, dtype=np.float64)
 
     def _list_of_single_times_to_array(self, timelist):
-        """To be able to filter on time condition"""
+        """To be able to filter on time condition and concatenate"""
         return np.array(timelist, dtype=np.float64)
 
     def on_click():
@@ -155,7 +175,6 @@ class OscilloGraph(NumericalGraphBase):
         Subclass to adapt to applications.
         """
         return measurement
-
 
     def get_time_boundaries(self, data):
         """Subclass if necessary."""
@@ -182,63 +201,78 @@ class OscilloGraph(NumericalGraphBase):
 
     # ========================= Graph Update Methods =========================
 
-    def refresh(self):
+    def wrap(self):
         """What to do each time the bars exceeed window size"""
         self.previous_data = self.current_data
         self.current_data = self.create_empty_data()
         self.reference_time += self.window_width
 
-    def manage_reference_time(self, data):
-        """Define and update reference time if necessary"""
-        if self.reference_time is None:
-            tmin, tmax = self.get_time_boundaries(data)
-            self.reference_time = tmin   # Take time of 1st data as time 0
+    def update_stored_data(self, data, stored_data):
+        """Store measurement time and values in active data lists.
 
-    def update_current_data(self, data):
-        """Store measurement time and values in active data lists."""
-
+        Parameters
+        ----------
+        data: data as output by format_measurement()
+        stored_data: either self.current_data or self.previous_data.
+        """
         name = data['name']
-        rel_time = data['time (unix)'] - self.reference_time
+        time = data['time (unix)']
         values = data['values']
 
-        self.current_data[name]['times'].append(rel_time)
+        stored_data[name]['times'].append(time)
         for i, value in enumerate(values):
-            self.current_data[name]['values'][i].append(value)
+            stored_data[name]['values'][i].append(value)
 
     def update_lines(self):
         """Update line positions with current data."""
 
         # Keep only previous drawings after current bar position
 
-        for lines, previous_data, current_data in zip(self.lines.values(),
-                                                      self.previous_data.values(),
-                                                      self.current_data.values()):
+        for name in self.lines:
 
-            if current_data['times']:  # Avoids problems if no data stored yet
+            lines = self.lines[name]
+            previous_data = self.previous_data[name]
+            current_data = self.current_data[name]
 
+            rel_times = []
+
+            # Avoids problems if no data stored yet
+            prev_exists = bool(previous_data['times'])
+            curr_exists = bool(current_data['times'])
+
+            if not (prev_exists or curr_exists):
+                continue
+
+            if curr_exists:
                 curr_times = self.timelist_to_array(current_data['times'])
-                prev_exists = bool(previous_data['times'])
+                curr_rel_times = curr_times - self.reference_time
+                rel_times.append(curr_rel_times)
+
+            if prev_exists:
+                prev_times = self.timelist_to_array(previous_data['times'])
+                prev_condition = (prev_times + self.window_width > self.current_time)
+                prev_rel_times = prev_times[prev_condition] - self.reference_time + self.window_width
+                rel_times.append(prev_rel_times)
+
+            rel_times_array = np.concatenate(rel_times)
+
+            for line, prev_values, curr_values in zip(lines,
+                                                      previous_data['values'],
+                                                      current_data['values']):
+
+                vals = []
+
+                if curr_exists:
+                    curr_vals = self.datalist_to_array(curr_values)
+                    vals.append(curr_vals)
 
                 if prev_exists:
-                    prev_times = self.timelist_to_array(previous_data['times'])
-                    condition = (prev_times > self.relative_time)
-                    times = np.concatenate((curr_times, prev_times[condition]))
-                else:
-                    times = curr_times
+                    prev_vals = self.datalist_to_array(prev_values)
+                    vals.append(prev_vals[prev_condition])
 
-                for line, prev_values, curr_values in zip(lines,
-                                                          previous_data['values'],
-                                                          current_data['values']):
+                values_array = np.concatenate(vals)
 
-                    curr_vals = self.datalist_to_array(curr_values)
-
-                    if prev_exists:
-                        prev_vals = self.datalist_to_array(prev_values)
-                        values = np.concatenate((curr_vals, prev_vals[condition]))
-                    else:
-                        values = curr_vals
-
-                    line.set_data(times, values)
+                line.set_data(rel_times_array, values_array)
 
     def update_bars(self):
         if self.reference_time:   # Avoids problems if no data arrived yet
