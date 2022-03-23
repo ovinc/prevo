@@ -40,6 +40,8 @@ class UpdateGraph(UpdateGraphBase):
     def after_getting_measurements(self):
         self.graph.update_lines()
         self.graph.update_bars()
+        if self.graph.relative_time > self.graph.window_width:
+            self.graph.refresh()
 
 
 class OscilloGraph(NumericalGraphBase):
@@ -85,6 +87,8 @@ class OscilloGraph(NumericalGraphBase):
         self.current_data = self.create_empty_data()
         self.previous_data = self.create_empty_data()
 
+    # ========================== Misc. Init Methods ==========================
+
     def create_axes(self):
         """Generate figure/axes as a function of input data types"""
 
@@ -114,6 +118,30 @@ class OscilloGraph(NumericalGraphBase):
         self.create_lines()
         self.create_bars()
 
+    def create_bars(self):
+        """Create traveling bars"""
+        self.bars = {}
+        for dtype, ax in self.axs.items():
+            barcolor = self.colors.get('bar', 'silver')
+            bar = ax.axvline(0, linestyle='-', c=barcolor, linewidth=4)
+            self.bars[dtype] = bar
+
+    # =============== Methods overriden from the parent class ================
+
+    def _list_of_single_values_to_array(self, datalist):
+        """To be able to filter on time condition"""
+        return np.array(datalist, dtype=np.float64)
+
+    def _list_of_single_times_to_array(self, timelist):
+        """To be able to filter on time condition"""
+        return np.array(timelist, dtype=np.float64)
+
+    def on_click():
+        """Here turn off autoscale, which can cause problems with blitting."""
+        pass
+
+    # ======= Methods that can be subclassed to adapt to applications ========
+
     def format_measurement(self, measurement):
         """Transform measurement from the queue into something usable by manage_data()
 
@@ -128,49 +156,6 @@ class OscilloGraph(NumericalGraphBase):
         """
         return measurement
 
-    def on_click():
-        """Here turn off autoscale, which can cause problems with blitting."""
-        pass
-
-    def _list_of_single_values_to_array(self, datalist):
-        """How to convert list of single values to a numpy array.
-
-        This is to transform measurements stored in self.current_values
-        into an array manageable by matplotlib for plotting.
-
-        Can be subclassed to adapt to applications."""
-        return np.array(datalist, dtype=np.float64)
-
-    def _list_of_single_times_to_array(self, timelist):
-        """How to convert list of single times to a numpy array.
-
-        This is to transform measurements stored in self.current_values
-        into an array manageable by matplotlib for plotting.
-
-        Can be subclassed to adapt to applications."""
-        return np.array(timelist, dtype=np.float64)
-
-    @property
-    def current_time(self):
-        return time.time()
-
-    @property
-    def relative_time(self):
-        return self.current_time - self.reference_time
-
-    def create_bars(self):
-        """Create traveling bars"""
-        self.bars = {}
-        for dtype, ax in self.axs.items():
-            barcolor = self.colors.get('bar', 'silver')
-            bar = ax.axvline(0, linestyle='-', c=barcolor, linewidth=4)
-            self.bars[dtype] = bar
-
-    def refresh_windows(self):
-        """What to do each time the bars exceeed window size"""
-        self.previous_data = self.current_data
-        self.current_data = self.create_empty_data()
-        self.reference_time += self.window_width
 
     def get_time_boundaries(self, data):
         """Subclass if necessary."""
@@ -180,15 +165,34 @@ class OscilloGraph(NumericalGraphBase):
         else:
             return t, t
 
+    # ========================== Misc. properties ============================
+
+    @property
+    def current_time(self):
+        return time.time()
+
+    @property
+    def relative_time(self):
+        return self.current_time - self.reference_time
+
+    @property
+    def animated_artists(self):
+        artists = self.lines_list + list(self.bars.values())
+        return artists
+
+    # ========================= Graph Update Methods =========================
+
+    def refresh(self):
+        """What to do each time the bars exceeed window size"""
+        self.previous_data = self.current_data
+        self.current_data = self.create_empty_data()
+        self.reference_time += self.window_width
+
     def manage_reference_time(self, data):
         """Define and update reference time if necessary"""
-        tmin, tmax = self.get_time_boundaries(data)
-
         if self.reference_time is None:
+            tmin, tmax = self.get_time_boundaries(data)
             self.reference_time = tmin   # Take time of 1st data as time 0
-
-        if tmax > self.reference_time + self.window_width:
-            self.refresh_windows()
 
     def update_current_data(self, data):
         """Store measurement time and values in active data lists."""
@@ -237,15 +241,10 @@ class OscilloGraph(NumericalGraphBase):
                     line.set_data(times, values)
 
     def update_bars(self):
-        if self.reference_time:  # Avoids problems if no data arrived yet
+        if self.reference_time:   # Avoids problems if no data arrived yet
             t = self.relative_time
             for bar in self.bars.values():
                 bar.set_xdata(t)
-
-    @property
-    def animated_artists(self):
-        artists = self.lines_list + list(self.bars.values())
-        return artists
 
     def run(self, q_plot, e_stop=None, e_close=None, e_graph=None,
             dt_graph=0.02, blit=True):
