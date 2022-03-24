@@ -2,4 +2,5 @@ recursive-include data *.json
 recursive-include data *.tsv
 recursive-include tests *.py
 recursive-include *.ipynb
+recursive-include examples *.ipynb
 include LICENSE

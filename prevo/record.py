@@ -201,7 +201,7 @@ class RecordBase:
 
     def __init__(self,
                  recordings,
-                 properties,
+                 properties=None,
                  path='.',
                  dt_save=1.9,
                  dt_request=0.7,
@@ -224,7 +224,7 @@ class RecordBase:
                       or dt_P=60 to change only time interval of recording 'P')
         """
         self.recordings = recordings
-        self.properties = properties
+        self.properties = properties if properties else {}
 
         self.property_commands = ClI._get_commands(self.properties)
         self.object_properties = ClI._get_controlled_properties(self,
