@@ -116,7 +116,7 @@ class SingleViewer(ViewerBase):
         (returns an array-like object).
         Can be subclassed to accommodate different queue formats.
         """
-        return measurement
+        return measurement['image']
 
     def _store_display_times(self):
         t = time.perf_counter()
