@@ -25,7 +25,7 @@ from abc import ABC, abstractmethod
 import tkinter as tk
 import time
 from queue import Queue, Empty
-from threading import Thread
+from threading import Thread, Event
 import itertools
 from traceback import print_exc
 
@@ -90,7 +90,11 @@ class ViewerBase(ABC):
 class SingleViewer(ViewerBase):
     """Base class for GUIs for viewing images from image queues."""
 
-    def __init__(self, image_queue, e_stop, dt_graph=0.01, info_queue=None,
+    def __init__(self,
+                 image_queue,
+                 e_stop=None,
+                 dt_graph=0.01,
+                 info_queue=None,
                  name='Camera'):
         """Parameters:
 
@@ -103,7 +107,7 @@ class SingleViewer(ViewerBase):
         super().__init__(dt_graph=dt_graph)
         self.image_queue = image_queue
         self.info_queue = info_queue
-        self.e_stop = e_stop
+        self.e_stop = e_stop if e_stop is not None else Event()
         self.name = name
 
         # store times at which images are shown on screen (e.g. for fps calc.)
@@ -172,8 +176,14 @@ class SingleStreamViewer:
 class MultipleViewer(ViewerBase):
     """Display several image streams at the same time."""
 
-    def __init__(self, image_queues, e_stop, dt_graph=0.01, Viewer=SingleViewer,
-                 add_ppties=None, add_ppty_name=None, **kwargs):
+    def __init__(self,
+                 image_queues,
+                 e_stop=None,
+                 dt_graph=0.01,
+                 Viewer=SingleViewer,
+                 add_ppties=None,
+                 add_ppty_name=None,
+                 **kwargs):
         """Parameters:
 
         - image_queues: dict {camera name: queue in which taken images are put.}
@@ -188,7 +198,7 @@ class MultipleViewer(ViewerBase):
         super().__init__(dt_graph=dt_graph)
 
         self.image_queues = image_queues
-        self.e_stop = e_stop
+        self.e_stop = e_stop if e_stop is not None else Event()
 
         self.viewers = {}
 
@@ -382,8 +392,12 @@ class CvSingleViewer(SingleViewer):
 class CvMultipleViewer(MultipleViewer):
     """Display several cameras at the same time using OpenCV"""
 
-    def __init__(self, image_queues, e_stop, dt_graph=0.01,
-                 Viewer=CvSingleViewer, **kwargs):
+    def __init__(self,
+                 image_queues,
+                 e_stop=None,
+                 dt_graph=0.01,
+                 Viewer=CvSingleViewer,
+                 **kwargs):
         """Parameters:
 
         - image_queues: dict {camera name: queue in which taken images are put.}
@@ -529,8 +543,12 @@ class MplSingleViewer(MplAnimation, SingleViewer):
 class MplMultipleViewer(MplAnimation, MultipleViewer):
     """Display several cameras at the same time using Matplotlib"""
 
-    def __init__(self, image_queues, e_stop, dt_graph=0.04,
-                 Viewer=MplSingleViewer, **kwargs):
+    def __init__(self,
+                 image_queues,
+                 e_stop=None,
+                 dt_graph=0.04,
+                 Viewer=MplSingleViewer,
+                 **kwargs):
         """Parameters:
 
         - image_queues: dict {camera name: queue in which taken images are put.}
@@ -588,8 +606,15 @@ class MplMultipleViewer(MplAnimation, MultipleViewer):
 class TkSingleViewer(SingleViewer):
     """Live view of camera images using tkinter"""
 
-    def __init__(self, image_queue, e_stop, info_queue=None, name="Camera",
-                 dt_graph=0.01, auto_size=True, fit_to_screen=True, root=None):
+    def __init__(self,
+                 image_queue,
+                 e_stop=None,
+                 info_queue=None,
+                 name="Camera",
+                 dt_graph=0.01,
+                 auto_size=True,
+                 fit_to_screen=True,
+                 root=None):
         """Parameters:
 
         - image_queue: queue in which taken images are put.
@@ -733,8 +758,12 @@ class TkSingleViewer(SingleViewer):
 class TkMultipleViewer(MultipleViewer):
     """Live view of images from multiple cameras using tkinter"""
 
-    def __init__(self, image_queues, e_stop, dt_graph=0.01,
-                 Viewer=TkSingleViewer, **kwargs):
+    def __init__(self,
+                 image_queues,
+                 e_stop=None,
+                 dt_graph=0.01,
+                 Viewer=TkSingleViewer,
+                 **kwargs):
         """Parameters:
 
         - image_queues: dict {camera name: queue in which taken images are put.}
@@ -860,9 +889,6 @@ class RecordSingleViewer:
 
         self.recording = recordings[self.name]  # self.name defined in super()
         self.dt_check = dt_check
-
-    def _measurement_to_image(self, measurement):
-        return measurement['image']
 
     def _init_run(self):
         super()._init_run()

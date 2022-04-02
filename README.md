@@ -3,25 +3,41 @@ About
 
 **P**eriodic **RE**cording and **V**isualization of (sensor) **O**bjects
 
-This package provides base classes to rapidly create interactive data recording for various applications (e.g. recording of temperature, time-lapses with cameras etc.). Sensors are read in a asynchronous fashion and can have different time intervals for data reading (or be continuous, i.e. as fast as possible). Tools for graphical visualizations of data during recording are also provided.
+This package provides classes to rapidly create interactive data recording for various applications (e.g. recording of temperature, time-lapses with cameras etc.).
+
+Sensors are read in an asynchronous fashion and can have different time intervals for data reading (or be continuous, i.e. as fast as possible). Synchronous recording is also possible (although not the main goal of this package) by defining a super-sensor object that reads all sensors (and which is itself probed at regular intervals).
+
+Tools for graphical visualizations of data during recording are also provided (updated numerical graphs, oscilloscope-like graphs, image viewers for cameras etc.)
+
+The package contains various modules:
+
+- `prevo.record`: record sensors periodically, CLI interface, trigger GUI tools from CLI (see `examples/Record.ipynb` for examples)
+- `prevo.plot`: plot numerical data in real time (regular plots, oscilloscope-like graphs, see `examples/LiveGraph.ipynb` for examples)
+- `prevo.viewers`: live view of images from camera-like sensors (see `examples/Viewers.ipynb` for examples)
+- `prevo.csv`: read / save data with CSV/TSV files
+- `prevo.parser`: parse command line arguments to trigger functions or class methods
+- `prevo.measurements`: additional tools to format measurements for `Record`-like classes.
+
+See Jupyter notebooks in `examples/` and docstrings for more help. Below is also an example showing the workflow for defining objects for periodic recording.
+
 
 Install
--------
+=======
 
 ```bash
 pip install prevo
 ```
 
 
-Main Contents
-=============
+Record sensors periodically
+===========================
 
 For using the package for asynchronous recording of data, three base classes must/can be subclassed:
 - `SensorBase` (requires subclassing)
 - `RecordingBase` (requires subclassing)
 - `RecordBase` (can be used as is or be subclassed)
 
-A minimal example is provided below, to record pressure and temperature asynchronously, assuming the user already has classes (`Temp`, `Gauge`) to take single-point measurements (it could be functions as well). Let's assume that the pressure measurement also has an `averaging` parameter to smooth the data.
+A minimal example is provided below, to record pressure and temperature asynchronously, assuming the user already has classes (`Temp`, `Gauge`) to take single-point measurements (it could be functions as well). See `examples/Record.ipynb` for an actual working example. Let's assume that the pressure measurement also has an `averaging` parameter to smooth the data.
 
 1) **Define the sensors**
 
@@ -139,20 +155,6 @@ A minimal example is provided below, to record pressure and temperature asynchro
     ```
 
 Note: context managers also possible (i.e. define `__enter__` and `__exit__` in `Sensor` class) e.g. if sensors have to be opened once at the beginning and closed in the end; this is managed automatically by `RecordBase` if a context manager is defined.
-
-See docstrings for more help.
-
-
-Additional tools
-================
-
-Some elements are also provided to simplify and/or extend the classes above:
-
-- plot numerical data in real time (see `prevo.plot` module and `GraphExamples.ipynb`)
-- live view images from camera-like sensors (see `prevo.viewers`)
-- read / save with CSV files (see `prevo.csv`)
-- parse command line arguments to trigger functions or class methods (see `prevo.parser`)
-- some tools to format measurements for `Record`-like classes (see `prevo.measurements`)
 
 See docstrings for more help.
 
