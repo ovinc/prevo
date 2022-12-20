@@ -72,6 +72,7 @@ class OscilloGraph(NumericalGraphBase):
                  data_ranges,
                  window_width=10,
                  colors=None,
+                 legends=None,
                  linestyle='.',
                  data_as_array=False):
         """Initiate figures and axes for data plot as a function of asked types.
@@ -89,6 +90,9 @@ class OscilloGraph(NumericalGraphBase):
         - window_width: width (in seconds) of the displayed window
         - colors: optional dict of colors with keys 'fig', 'ax', 'bar' and the
                   names of the recordings.
+        - legends: optional dict of legend names (iterable) corresponding to
+                   all channels of each sensor, with the names of the
+                   recordings as keys.
         - linestyle: Matplotlib linestyle (e.g. '.', '-', '.-' etc.)
         - data_as_array: if sensors return arrays of values for different times
                          instead of values for a single time, put this
@@ -104,6 +108,7 @@ class OscilloGraph(NumericalGraphBase):
         super().__init__(names=names,
                          data_types=data_types,
                          colors=colors,
+                         legends=legends,
                          linestyle=linestyle,
                          data_as_array=data_as_array)
 

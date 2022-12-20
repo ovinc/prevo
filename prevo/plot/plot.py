@@ -32,6 +32,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.lines import Line2D
 import oclock
 
 from .general import NumericalGraphBase, UpdateGraphBase
@@ -76,6 +77,7 @@ class NumericalGraph(NumericalGraphBase):
                  names,
                  data_types,
                  colors=None,
+                 legends=None,
                  linestyle='.',
                  data_as_array=False,
                  time_conversion='numpy'):
@@ -89,6 +91,9 @@ class NumericalGraph(NumericalGraphBase):
                       (dict can have more keys than those in 'names')
         - colors: optional dict of colors with keys 'fig', 'ax', and the
                   names of the recordings.
+        - legends: optional dict of legend names (iterable) corresponding to
+                   all channels of each sensor, with the names of the
+                   recordings as keys.
         - linestyle: Matplotlib linestyle (e.g. '.', '-', '.-' etc.)
         - data_as_array: if sensors return arrays of values for different times
                          instead of values for a single time, put this
@@ -102,6 +107,7 @@ class NumericalGraph(NumericalGraphBase):
                          data_types=data_types,
                          colors=colors,
                          linestyle=linestyle,
+                         legends=legends,
                          data_as_array=data_as_array)
 
         time_converters = {'datetime': self._to_datetime_datetime,

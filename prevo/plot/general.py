@@ -82,6 +82,7 @@ class NumericalGraphBase(GraphBase):
                  names,
                  data_types,
                  colors=None,
+                 legends=None,
                  linestyle='.',
                  data_as_array=False):
         """Initiate figures and axes for data plot as a function of asked types.
@@ -94,6 +95,9 @@ class NumericalGraphBase(GraphBase):
                       (dict can have more keys than those in 'names')
         - colors: optional dict of colors with keys 'fig', 'ax', and the
                     names of the recordings.
+        - legends: optional dict of legend names (iterable) corresponding to
+                   all channels of each sensor, with the names of the
+                   recordings as keys.
         - linestyle: Matplotlib linestyle (e.g. '.', '-', '.-' etc.)
         - data_as_array: if sensors return arrays of values for different times
                          instead of values for a single time, put this
@@ -106,6 +110,7 @@ class NumericalGraphBase(GraphBase):
         self.data_types = {name: data_types[name] for name in self.names}
         self.colors = colors
         self.linestyle = linestyle
+        self.legends = legends if legends is not None else {}
 
         try:
             data_as_array.get   # no error if dict
@@ -239,17 +244,24 @@ class NumericalGraphBase(GraphBase):
 
             dtypes = self.data_types[name]
             clrs = self.colors[name]
+            labels = self.legends.get(name, [None] * len(dtypes))
+
             self.lines[name] = []
 
-            for dtype, clr in zip(dtypes, clrs):
+            for dtype, clr, label in zip(dtypes, clrs, labels):
 
                 # Plot data in correct axis depending on type
                 ax = self.axs[dtype]
-                line, = ax.plot([], [], self.linestyle, color=clr)
+                line, = ax.plot([], [], self.linestyle, color=clr, label=label)
 
                 self.lines[name].append(line)
                 # Below, used for returning animated artists for blitting
                 self.lines_list.append(line)
+
+        if self.legends:
+            for ax in self.axs.values():
+                ax.legend(loc='lower left')
+
 
     def create_empty_data(self):
         data = {}
