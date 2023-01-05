@@ -83,6 +83,7 @@ class NumericalGraphBase(GraphBase):
                  data_types,
                  colors=None,
                  legends=None,
+                 linestyles=None,
                  linestyle='.',
                  data_as_array=False):
         """Initiate figures and axes for data plot as a function of asked types.
@@ -98,6 +99,13 @@ class NumericalGraphBase(GraphBase):
         - legends: optional dict of legend names (iterable) corresponding to
                    all channels of each sensor, with the names of the
                    recordings as keys.
+        - linestyles: optional dict of linestyles (iterable) to distinguish
+                      channels and sensors, with the names of the recordings
+                      as keys. If not specified (None), all lines have the
+                      linestyle defined by the `linestyle=` parameter (see
+                      below). If only some recordings are specified, the other
+                      recordings have the default linestyle or the linestyle
+                      defined by the `linestyle=` parameter.
         - linestyle: Matplotlib linestyle (e.g. '.', '-', '.-' etc.)
         - data_as_array: if sensors return arrays of values for different times
                          instead of values for a single time, put this
@@ -109,8 +117,9 @@ class NumericalGraphBase(GraphBase):
         self.names = names
         self.data_types = {name: data_types[name] for name in self.names}
         self.colors = colors
-        self.linestyle = linestyle
         self.legends = legends if legends is not None else {}
+        self.linestyles = linestyles if linestyles is not None else {}
+        self.linestyle = linestyle
 
         try:
             data_as_array.get   # no error if dict
@@ -245,14 +254,15 @@ class NumericalGraphBase(GraphBase):
             dtypes = self.data_types[name]
             clrs = self.colors[name]
             labels = self.legends.get(name, [None] * len(dtypes))
+            lstyles = self.linestyles.get(name, [self.linestyle] * len(dtypes))
 
             self.lines[name] = []
 
-            for dtype, clr, label in zip(dtypes, clrs, labels):
+            for dtype, clr, label, lstyle in zip(dtypes, clrs, labels, lstyles):
 
                 # Plot data in correct axis depending on type
                 ax = self.axs[dtype]
-                line, = ax.plot([], [], self.linestyle, color=clr, label=label)
+                line, = ax.plot([], [], lstyle, color=clr, label=label)
 
                 self.lines[name].append(line)
                 # Below, used for returning animated artists for blitting
