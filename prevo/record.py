@@ -114,11 +114,18 @@ class SensorBase(ABC):
 class RecordingBase(ABC):
     """Base class for recording object used by RecordBase. To subclass"""
 
-    def __init__(self, Sensor, dt, continuous=False, warnings=False, precise=False):
+    def __init__(self,
+                 Sensor,
+                 dt,
+                 active=True,
+                 continuous=False,
+                 warnings=False,
+                 precise=False):
         """Parameters:
 
         - Sensor: subclass of SensorBase.
         - dt: time interval between readings.
+        - active: if False, do not record data until self.active set to True.
         - continuous: if True, take data as fast as possible from sensor.
         - warnings: if True, print warnings of Timer (e.g. loop too short).
         - precise: if True, use precise timer in oclock (see oclock.Timer).
@@ -129,6 +136,8 @@ class RecordingBase(ABC):
                                   name=self.name,
                                   warnings=warnings,
                                   precise=precise)
+
+        self.active = active  # can be set to False to temporarily stop recording from sensor
         self.continuous = continuous
 
         # Subclasses must define the following attributes upon init ----------
@@ -443,6 +452,12 @@ class RecordBase:
             recording.timer.reset()
 
             while not self.e_stop.is_set():
+
+                if not recording.active:
+                    if not recording.continuous:
+                        # to avoid checking too frequently if active or not.
+                        recording.timer.checkpt()
+                    continue
 
                 try:
                     data = sensor.read()
