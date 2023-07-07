@@ -12,11 +12,20 @@ Tools for graphical visualizations of data during recording are also provided (u
 The package contains various modules:
 
 - `prevo.record`: record sensors periodically, CLI interface, trigger GUI tools from CLI (see `examples/Record.ipynb` for examples)
+
+- `prevo.control`: control device properties, create pre-defined temporal evolutions of settings for sensors, devices and recording properties (see `examples/Control.ipynb` for examples)
+
 - `prevo.plot`: plot numerical data in real time (regular plots, oscilloscope-like graphs, see `examples/LiveGraph.ipynb` for examples)
+
 - `prevo.viewers`: live view of images from camera-like sensors (see `examples/Viewers.ipynb` for examples)
+
 - `prevo.csv`: read / save data with CSV/TSV files
+
 - `prevo.parser`: parse command line arguments to trigger functions or class methods
+
 - `prevo.measurements`: additional tools to format measurements for `Record`-like classes.
+
+- `prevo.misc`: miscellaneous tools, including dummy sensors and devices.
 
 See Jupyter notebooks in `examples/` and docstrings for more help. Below is also an example showing the workflow for defining objects for periodic recording.
 

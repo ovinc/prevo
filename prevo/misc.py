@@ -157,7 +157,7 @@ class PeriodicTimedSensor(PeriodicSensor):
         return data
 
 
-# ============================== Dummy Sensors ===============================
+# ======================== Dummy Sensors and Devices =========================
 
 
 class DummyPressureSensor:
@@ -198,3 +198,37 @@ class DummyElectricalSensor:
         data_array_a = 0.1 * np.random.rand(self.npts) + 0.7
         data_array_b = 0.2 * np.random.rand(self.npts) + 0.3
         return np.vstack((time_array, data_array_a, data_array_b))
+
+
+class DummyCirculatedBath:
+    """Mimics a circulated bath to control temperature with a fluid."""
+
+    def __init__(self, setpt=25):
+        self.setpt = setpt
+        self.status = 'off'
+
+    def on(self):
+        """Turn the bath on."""
+        self._status = 'on'
+        print('Bath ON')
+
+    def off(self):
+        """Turn the bath off."""
+        self._status = 'off'
+        print('Bath OFF')
+
+    @property
+    def tfluid(self):
+        """Read fluid temperature in the bath."""
+        return self._setpt + 0.1 * (random() - 0.5)
+
+
+class DummyLapseCamera(PeriodicSensor):
+    """Mock time-lapse camera returning white-noise images periodically"""
+
+    name = 'Mock Lapse Camera'
+
+    def _read(self):
+        """Return image in a dict (see explanation below)"""
+        img = np.random.randint(256, size=(480, 640), dtype='uint8')
+        return {'image': img}

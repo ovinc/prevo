@@ -89,8 +89,7 @@ class SensorBase(ABC):
     @property
     @abstractmethod
     def name(self):
-        """Name of sensor, Must be a class attribute.
-        """
+        """Name of sensor, Must be a class attribute."""
         pass
 
     @abstractmethod
@@ -120,7 +119,8 @@ class RecordingBase(ABC):
                  active=True,
                  continuous=False,
                  warnings=False,
-                 precise=False):
+                 precise=False,
+                 program=None):
         """Parameters:
 
         - Sensor: subclass of SensorBase.
@@ -129,6 +129,11 @@ class RecordingBase(ABC):
         - continuous: if True, take data as fast as possible from sensor.
         - warnings: if True, print warnings of Timer (e.g. loop too short).
         - precise: if True, use precise timer in oclock (see oclock.Timer).
+        - program: optional pre-defined temporal pattern of change of
+                   properties of recording (e.g. define some times during
+                   which sensor is active or not, or change time interval
+                   between data points after some time, etc.)
+                   (needs to have a non-blocking run() method)
         """
         self.Sensor = Sensor
         self.name = Sensor.name
@@ -139,6 +144,7 @@ class RecordingBase(ABC):
 
         self.active = active  # can be set to False to temporarily stop recording from sensor
         self.continuous = continuous
+        self.program = program
 
         # Subclasses must define the following attributes upon init ----------
 
@@ -450,6 +456,10 @@ class RecordBase:
 
             # Without this here, the first data points are irregularly spaced.
             recording.timer.reset()
+
+            # Optional pre-defined program for change of recording properties
+            if recording.program is not None:
+                recording.program.run()
 
             while not self.e_stop.is_set():
 
