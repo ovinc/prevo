@@ -30,8 +30,8 @@ from pathlib import Path
 import oclock
 
 # Local imports
+from .program import _format_time, _get_and_check_input
 from .program import Program, Stairs, Teeth
-
 
 # ----------------------------------------------------------------------------
 # ================================ Base Class ================================
@@ -46,8 +46,8 @@ class Control:
 
     Needs to be subclassed.
     """
-    # Allowed inputs as parameters for control (e.g., vapor pressure, %RH etc)
-    # To be defined in subclass (tuple of str)
+    # [Optional] allowed inputs as parameters for control (e.g. 'p', 'rh', etc.)
+    # To be defined in subclasses as an iterable, if necessary
     possible_inputs = None
 
     def __init__(self,
@@ -80,32 +80,6 @@ class Control:
 
     # -------- Private methods for class operation behind the scenes ---------
 
-    @staticmethod
-    def _format_time(t):
-        """format hh:mm:ss str time into timedelta if not already timedelta."""
-        try:
-            dt = t.total_seconds()
-        except AttributeError:
-            dt = oclock.parse_time(t).total_seconds()
-        finally:
-            return dt
-
-    def _check_input(self, values):
-        """Check that input is OK and return the quantity used (e.g. 'rh')."""
-        try:
-            qty, = tuple(values.keys())
-        except ValueError:
-            failed = True
-            qty = None
-        else:
-            failed = False
-
-        if failed or qty not in self.possible_inputs:
-            msg = f"Settings must only have one of {self.possible_inputs} as key."
-            raise ValueError(msg)
-        else:
-            return qty
-
     def _check_range_limits(self, qty, value):
         """Return value if within limits, else return higher or lower limit."""
         vmin, vmax = self.range_limits
@@ -130,7 +104,7 @@ class Control:
         msg = f'==> NEW STEP from {qty}={v1} to {qty}={v2} in {duration}\n'
         self._manage_message(msg)
 
-    def _manage_message(self, msg):
+    def _manage_message(self, msg, force_print=False):
         """Print in console and/or save to log file if options are activated"""
 
         t_str = datetime.now().isoformat(sep=' ', timespec='seconds')
@@ -143,7 +117,7 @@ class Control:
             except Exception as e:
                 print(f'Error saving to log file: {e}')
 
-        if self.print_log:
+        if self.print_log or force_print:
             print(line)
 
     # ------- Private methods that need to be defined in child classes -------
@@ -192,16 +166,27 @@ class Control:
 
     def program(self, repeat=1, **steps):
         """Convenience method to generate a program. see Program Class."""
-        return Program(self, repeat, **steps)
+        return Program(control=self,
+                       repeat=repeat,
+                       **steps)
 
     def stairs(self, duration=None, repeat=1, **steps):
         """Convenience method to generate a stairs program. see Stairs Class."""
-        return Stairs(self, duration, repeat, **steps)
+        return Stairs(control=self,
+                      duration=duration,
+                      repeat=repeat,
+                      **steps)
 
     def teeth(self, slope=None, slope_unit='/min', plateau_duration=None,
               start='plateau', repeat=1, **steps):
         """Convenience method to generate a teeth program. see Teeth Class."""
-        return Teeth(self, slope, slope_unit, plateau_duration, start, repeat, **steps)
+        return Teeth(control=self,
+                     slope=slope,
+                     slope_unit=slope_unit,
+                     plateau_duration=plateau_duration,
+                     start=start,
+                     repeat=repeat,
+                     **steps)
 
 
 # ----------------------------------------------------------------------------
@@ -287,7 +272,7 @@ class PeriodicControl(Control):
         (OPTIONAL)
         Define in subclass.
         """
-        pass
+        return f'Setting: {value}'
 
     # =============== Methods deriving from the methods above ================
 
@@ -300,7 +285,8 @@ class PeriodicControl(Control):
         return round(setting, self.round_digits)
 
     def print_setting(self, value):
-        msg = self._print_setting(value)
+        rounded_setting = round(value, self.round_digits)
+        msg = self._print_setting(rounded_setting)
         self._manage_message(msg)
 
     # =========== MISC. methods used for ramping and set settings ============
@@ -335,7 +321,7 @@ class PeriodicControl(Control):
         Not a public method; is used by _ramp() and ramp().
         """
         target_setting = self._convert_input(**{qty: value})
-        t_ramp = self._format_time(duration)
+        t_ramp = _format_time(duration)
 
         setting_success = False
 
@@ -368,13 +354,14 @@ class PeriodicControl(Control):
         """
         self.stop_event.clear()
 
-        qty = self._check_input(values)  # 'p' or 'T', etc.
-        v1, v2 = values[qty]
-
+        qty, (v1, v2) = _get_and_check_input(
+            values,
+            possible_inputs=self.possible_inputs
+        )
         self._print_ramp_info(qty, v1, v2, duration)
 
         self.timer.reset()
-        t_ramp = self._format_time(duration)
+        t_ramp = _format_time(duration)
 
         if v1 == v2:
             # If dwelling, no need to update the setting regularly.
@@ -429,3 +416,67 @@ class PeriodicControl(Control):
         """Cancel timers and stop ramp."""
         self.stop_event.set()
         self.timer.stop()
+
+
+# ----------------------------------------------------------------------------
+# =========== Periodic control adapted to the prevo.record module ============
+# ----------------------------------------------------------------------------
+
+
+class RecordingControl(PeriodicControl):
+    """Control of prevo Recordings objects"""
+
+    possible_inputs = 'values',
+
+    def __init__(self,
+                 recording=None,
+                 ppty=None,
+                 dt=1,
+                 range_limits=(None, None),
+                 round_digits=3,
+                 print_log=False,
+                 save_log=True,
+                 log_file='Control_Log_Recording.txt',
+                 savepath='.'):
+        """Create PeriodicTemperatureControl object, with parameters:
+
+        - recording: Recording object or subclass.
+        - ppty: name of property to control within that recording (e.g. 'sensor.fps')
+        - dt: time interval (s) between commands
+        - range_limits: safety limits; tuple (min, max)
+        - round_digits: number of digits after decimal point to keep/consider
+                        when reading or applying settings
+        - print_log: if True (default), print succession of settings in console
+        - save_log: if True (default), save succession of settings sent to
+                    device into a .txt file
+        - log_file: name of .txt file in which to save log of settings.
+                    (default: Control_Log.txt)
+        - savepath: directory in which to save the log file
+        """
+        PeriodicControl.__init__(self,
+                                 dt=dt,
+                                 range_limits=range_limits,
+                                 round_digits=round_digits,
+                                 print_log=print_log,
+                                 save_log=save_log,
+                                 log_file=log_file,
+                                 savepath=savepath)
+
+        self.recording = recording
+        self.ppty = ppty
+        self.round_digits = round_digits
+        self.value_type = ppty
+
+    def _apply_setting(self, value):
+        """Set property value on recording."""
+        print(self.recording.sensor.dt)
+        exec(f'self.recording.{self.ppty} = {value}')
+
+    def _read_setting(self):
+        """Get property value of recording."""
+        self._value = None  # exec does not work on local scope
+        exec(f'self._value = self.recording.{self.ppty}')
+        return self._value
+
+    def _convert_input(self, **values):
+        return values['values']

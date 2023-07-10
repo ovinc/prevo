@@ -24,6 +24,7 @@ from datetime import timedelta
 from threading import Thread, Event
 
 # Other modules
+import oclock
 import matplotlib.pyplot as plt
 
 
@@ -34,6 +35,29 @@ time_factors = {'/s': 1, '/min': 60, '/h': 3600}  # used for slope calculations
 
 
 # ============================= Misc. Functions ==============================
+
+def _get_and_check_input(entry, possible_inputs):
+    try:
+        (quantity, values), = entry.items()
+    except ValueError:
+        msg = f"Only one input quantity allowed, not {list(entry.keys())}"
+        raise ValueError(msg)
+
+    if possible_inputs is not None and quantity not in possible_inputs:
+        msg = f"Settings must only have one of {possible_inputs} as key."
+        raise ValueError(msg)
+    else:
+        return quantity, values
+
+
+def _format_time(t):
+    """format hh:mm:ss str time into timedelta if not already timedelta."""
+    try:
+        dt = t.total_seconds()
+    except AttributeError:
+        dt = oclock.parse_time(t).total_seconds()
+    finally:
+        return dt
 
 
 def _seconds_to_hms(t):
@@ -55,12 +79,19 @@ def _circular_permutation(x):
 class Program:
     """Class for managing programmable cycles for control of devices."""
 
-    def __init__(self, control, repeat=1, **steps):
+    def __init__(self,
+                 control=None,
+                 repeat=1,
+                 **steps):
         """Initiate temperature cycle(s) program on device.
 
         Parameters
         ----------
         - control: object of the Control class (or child classes)
+                   (can be added later after instantiation)
+                   # Note: Program will inherit possible_inputs from the
+                           Control object either upon instantiation or
+                           when it is defined later.
         - repeat: number of times the cycle is repeated (int)
         - steps: kwargs/dict with the following keys:
             * durations: list tt of step durations (timedelta or str 'h:m:s')
@@ -96,31 +127,36 @@ class Program:
         program.running  # check whether program is running or not
         program.stop()   # stop program
         """
-        self.durations = steps.pop('durations')  # list of step durations
-        self.quantity = control._check_input(steps)  # 'p', 'rh', 'T', etc.
-
-        step_list = steps[self.quantity]
-        self.origins = step_list
-        self.targets = _circular_permutation(step_list)  # loops back to beginning
-
-        self.steps = list(zip(self.origins, self.targets, self.durations))
         self.control = control
         self.repeat = repeat
+        self.durations = steps.pop('durations')  # list of step durations
+
+        # quantity: 'p', 'rh', 'T', etc., origins: initial values for each ramp
+        self.quantity, self.origins = _get_and_check_input(
+            steps,
+            possible_inputs=self.possible_inputs
+        )
+        self.targets = _circular_permutation(self.origins)  # loops back to beginning
 
         self.stop_event = Event()
         self.stop_event.set()
 
     def __repr__(self):
-        ns = len(self.durations)
-        s = f'{self.__class__} with {ns} steps of {self.quantity.upper()} ' \
-            f'and {self.repeat} repeats.'
-        return s
+        msg = f'{self.__class__} with {len(self.durations)} steps of ' \
+              f'{self.quantity.upper()} and {self.repeat} repeats.'
+        return msg
 
     def _run(self):
         """Start program in a blocking manner, stop if stop_event is set."""
 
+        if self.control is None:
+            msg = 'Control object that the program acts upon not defined yet. '
+            msg += 'Please defined a `program.control` attribute of Control type.'
+            raise ValueError(msg)
+
         if self.running:
-            print('Program already running. No action taken.')
+            msg = 'Program already running. No action taken.'
+            self.control._manage_message(msg, force_print=True)
             return
 
         self.stop_event.clear()
@@ -128,18 +164,17 @@ class Program:
         for n in range(self.repeat):
 
             msg = f'------ PROGRAM --- NEW CYCLE {n+1} / {self.repeat}\n'
-            print(msg)
-            self.control._manage_message(msg)
+            self.control._manage_message(msg, force_print=True)
 
-            for v1, v2, duration in self.steps:
+            for v1, v2, duration in zip(self.origins, self.targets, self.durations):
                 self.control._ramp(duration, **{self.quantity: (v1, v2)})
                 if self.stop_event.is_set():
-                    print('------ PROGRAM --- STOPPED')
+                    msg = '------ PROGRAM --- STOPPED'
+                    self.control._manage_message(msg, force_print=True)
                     return
         else:
             msg = '------ PROGRAM --- FINISHED'
-            print(msg)
-            self.control._manage_message(msg)
+            self.control._manage_message(msg, force_print=True)
 
     def run(self):
         """Start program in a non-blocking manner."""
@@ -156,8 +191,8 @@ class Program:
         ax.grid()
 
         t = 0
-        for v1, v2, duration in self.steps:
-            dt = self.control._format_time(duration) / 3600  # time in hours
+        for v1, v2, duration in zip(self.origins, self.targets, self.durations):
+            dt = _format_time(duration) / 3600  # time in hours
             ax.plot([t, t + dt], [v1, v2], '-ok')
             t += dt
 
@@ -171,7 +206,7 @@ class Program:
         """Duration of a single cycle (1 repeat) of the program."""
         dt = 0
         for duration in self.durations:
-            dt += self.control._format_time(duration)  # in seconds
+            dt += _format_time(duration)  # in seconds
         return timedelta(seconds=dt)
 
     @property
@@ -184,16 +219,36 @@ class Program:
         is_running = False if self.stop_event.is_set() else True
         return is_running
 
+    @property
+    def control(self):
+        return self._control
+
+    @control.setter
+    def control(self, value):
+        self._control = value
+        if self._control is None:
+            self.possible_inputs = None
+        else:
+            self.possible_inputs = self._control.possible_inputs
+
 
 class Stairs(Program):
     """Special program consisting in plateaus of temperature, of same duration."""
 
-    def __init__(self, control, duration=None, repeat=1, **steps):
+    def __init__(self,
+                 control=None,
+                 duration=None,
+                 repeat=1,
+                 **steps):
         """Specific program with a succession of constant setting plateaus.
 
         Parameters
         ----------
         - control: object of the Control class (or child classes)
+                   (can be added later after instantiation)
+                   # Note: Program will inherit possible inputs from the
+                           Control object either upon instantiation or
+                           when it is defined later.
         - duration: (str of type 'hh:mm:ss' or timedelta): if not None, sets
           the duration of every plateau to be the same. If None, a list of
           durations must be supplied within **steps (key 'durations').
@@ -205,7 +260,7 @@ class Stairs(Program):
             - if duration is None: must contain the key 'durations' with a list
               (tt) of plateau durations as value
             - if duration is not None: 'durations' key is ignored
-            - other key myust be p=, rh= etc. with the list of plateau setpoints
+            - other key must be p=, rh= etc. with the list of plateau setpoints
               (vv) s values.
 
         Notes
@@ -257,12 +312,14 @@ class Stairs(Program):
                         |           |   |           |   |           |
                 2338     ............    ............    ............
         """
+        self.control = control  # To be able to get possible_inputs automatically
         if duration is None:
             durations = steps.pop('durations')  # list of step durations
 
-        qty = control._check_input(steps)    # 'p', 'rh', 'T', etc.
-        step_plateaus = steps[qty]
-
+        qty, step_plateaus = _get_and_check_input(
+            steps,
+            possible_inputs=self.possible_inputs
+        )
         step_points = sum([[v, v] for v in step_plateaus], [])
 
         if duration is None:
@@ -272,19 +329,29 @@ class Stairs(Program):
 
         formatted_steps = {'durations': step_durations, qty: step_points}
 
-        super().__init__(control, repeat=repeat, **formatted_steps)
+        super().__init__(control=control, repeat=repeat, **formatted_steps)
 
 
 class Teeth(Program):
     """Plateaus of fixed duration separated by ramps of constant slope."""
 
-    def __init__(self, control, slope=None, slope_unit='/min',
-                 plateau_duration=None, start='plateau', repeat=1, **steps):
+    def __init__(self,
+                 control=None,
+                 slope=None,
+                 slope_unit='/min',
+                 plateau_duration=None,
+                 start='plateau',
+                 repeat=1,
+                 **steps):
         """Plateaus of fixed duration separated by ramps of constant slope.
 
         Parameters
         ----------
         - control: object of the Control class (or child classes)
+                   (can be added later after instantiation)
+                   # Note: Program will inherit possible inputs from the
+                           Control object either upon instantiation or
+                           when it is defined later.
         - slope: rate of change of the parameter specified in **steps. For
           example, if steps contains rh=..., the slope is in %RH / min, except
           if a different time unit is specified in slope_unit.
@@ -299,7 +366,7 @@ class Teeth(Program):
 
         - **steps:
             - correspond to the values of the plateaus.
-            - only key myust be p=, rh= etc. with the list of plateau setpoints
+            - only key must be p=, rh= etc. with the list of plateau setpoints
               as values.
 
         Example 1
@@ -341,12 +408,14 @@ class Teeth(Program):
                                   .    .                 .    .
                 1000               ....                   ....
         """
+        self.control = control  # To be able to get possible_inputs automatically
         self.slope = slope
         self.slope_unit = slope_unit
 
-        qty = control._check_input(steps)  # 'p', 'rh', 'T', etc.
-
-        values = steps[qty]
+        qty, values = _get_and_check_input(
+            steps,
+            possible_inputs=self.possible_inputs
+        )
         next_values = _circular_permutation(values)
 
         dt_ramps = [self._slope_to_time(vals) for vals in zip(values, next_values)]
