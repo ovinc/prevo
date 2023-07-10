@@ -464,12 +464,9 @@ class RecordingControl(PeriodicControl):
 
         self.recording = recording
         self.ppty = ppty
-        self.round_digits = round_digits
-        self.value_type = ppty
 
     def _apply_setting(self, value):
         """Set property value on recording."""
-        print(self.recording.sensor.dt)
         exec(f'self.recording.{self.ppty} = {value}')
 
     def _read_setting(self):
@@ -477,6 +474,10 @@ class RecordingControl(PeriodicControl):
         self._value = None  # exec does not work on local scope
         exec(f'self._value = self.recording.{self.ppty}')
         return self._value
+
+    def _print_setting(self, value):
+        """How to print information about current setting in console."""
+        return f'Setting: {self.ppty}={value}'
 
     def _convert_input(self, **values):
         return values['values']

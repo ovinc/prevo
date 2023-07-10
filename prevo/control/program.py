@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 # ================================== Config ==================================
 
 
-time_factors = {'/s': 1, '/min': 60, '/h': 3600}  # used for slope calculations
+time_factors = {'s': 1, 'min': 60, 'h': 3600}  # used for slope calculations
 
 
 # ============================= Misc. Functions ==============================
@@ -81,6 +81,7 @@ class Program:
 
     def __init__(self,
                  control=None,
+                 ppty='',
                  repeat=1,
                  **steps):
         """Initiate temperature cycle(s) program on device.
@@ -92,6 +93,8 @@ class Program:
                    # Note: Program will inherit possible_inputs from the
                            Control object either upon instantiation or
                            when it is defined later.
+        - ppty (str): optional name of property that is being programmed
+                      (for repr purposes only)
         - repeat: number of times the cycle is repeated (int)
         - steps: kwargs/dict with the following keys:
             * durations: list tt of step durations (timedelta or str 'h:m:s')
@@ -128,6 +131,7 @@ class Program:
         program.stop()   # stop program
         """
         self.control = control
+        self.ppty = ppty
         self.repeat = repeat
         self.durations = steps.pop('durations')  # list of step durations
 
@@ -185,19 +189,22 @@ class Program:
         self.stop_event.set()
         self.control.stop()
 
-    def plot(self):
-        """Same input as cycle(), to visualize the program before running it."""
+    def plot(self, time_unit='min'):
+        """Same input as cycle(), to visualize the program before running it.
+
+        Note: time_unit can be in 'h', 'min', 's'
+        """
         fig, ax = plt.subplots()
         ax.grid()
 
         t = 0
         for v1, v2, duration in zip(self.origins, self.targets, self.durations):
-            dt = _format_time(duration) / 3600  # time in hours
+            dt = _format_time(duration) / time_factors[time_unit]  # h, min, s
             ax.plot([t, t + dt], [v1, v2], '-ok')
             t += dt
 
-        ax.set_xlabel('time (hours)')
-        ax.set_ylabel(self.quantity.upper())
+        ax.set_xlabel(f'time ({time_unit})')
+        ax.set_ylabel(f'{self.ppty}{self.quantity}')
 
         fig.show()
 
@@ -442,7 +449,7 @@ class Teeth(Program):
 
         v1, v2 = values
 
-        dvdt = self.slope / time_factors[self.slope_unit]  # in qty / second
+        dvdt = self.slope / time_factors[f'/{self.slope_unit}']  # in qty / second
 
         dt = abs((v2 - v1) / dvdt)  # ramp time in seconds
         h, m, s = _seconds_to_hms(dt)

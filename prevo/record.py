@@ -34,6 +34,9 @@ from tqdm import tqdm
 import oclock
 from clivo import CommandLineInterface as ClI
 
+# Local imports
+from .control import RecordingControl
+
 
 # ================================ MISC Tools ================================
 
@@ -120,7 +123,8 @@ class RecordingBase(ABC):
                  continuous=False,
                  warnings=False,
                  precise=False,
-                 program=None):
+                 programs=None,
+                 program_controls=None):
         """Parameters:
 
         - Sensor: subclass of SensorBase.
@@ -129,11 +133,14 @@ class RecordingBase(ABC):
         - continuous: if True, take data as fast as possible from sensor.
         - warnings: if True, print warnings of Timer (e.g. loop too short).
         - precise: if True, use precise timer in oclock (see oclock.Timer).
-        - program: optional pre-defined temporal pattern of change of
-                   properties of recording (e.g. define some times during
-                   which sensor is active or not, or change time interval
-                   between data points after some time, etc.)
-                   (needs to have a non-blocking run() method)
+        - programs: dict {ppty_name: program} with program an object of the
+                    prevo.control.Program class or subclasses.
+                    --> optional pre-defined temporal pattern of change of
+                    properties of recording (e.g. define some times during
+                    which sensor is active or not, or change time interval
+                    between data points after some time, etc.)
+        - program_controls: dict {ppty_name: kwargs} of any kwargs to pass to
+                            the program controls (e.g. dt, range_limits, etc.)
         """
         self.Sensor = Sensor
         self.name = Sensor.name
@@ -144,7 +151,9 @@ class RecordingBase(ABC):
 
         self.active = active  # can be set to False to temporarily stop recording from sensor
         self.continuous = continuous
-        self.program = program
+
+        self._init_programs(programs=programs,
+                            program_controls=program_controls)
 
         # Subclasses must define the following attributes upon init ----------
 
@@ -155,6 +164,29 @@ class RecordingBase(ABC):
         # Iterable of the name of properties of the object that the CLI controls.
         # e.g. 'timer.interval', 'averaging', etc.
         self.controlled_properties = []
+
+    # Private methods --------------------------------------------------------
+
+    def _init_programs(self, programs, program_controls):
+        self.programs = programs
+        if programs is None:
+            return
+        for ppty, program in self.programs.items():
+            if program_controls is not None:
+                control_kwargs = program_controls.get(ppty, {})
+            else:
+                control_kwargs = {}
+            log_filename = f'Control_Log_{self.name}_{ppty}.txt'
+            program.control = RecordingControl(recording=self.recording,
+                                               ppty=ppty,
+                                               log_file=log_filename,
+                                               **control_kwargs)
+
+    def _stop_programs(self):
+        if self.programs is None:
+            return
+        for program in self.programs.values():
+            program.stop()
 
     # Compulsory methods to subclass -----------------------------------------
 
@@ -203,13 +235,12 @@ class RecordingBase(ABC):
     def on_stop(self):
         """What happens when a stop event is requested in the CLI"""
         self.timer.stop()
-
+        self._stop_programs()
 
 class RecordBase:
     """Asynchronous recording of several Recordings object.
 
-    Recordings objects are of type RecordingBase.
-    """
+    Recordings objects are of type RecordingBase."""
 
     # Warnings when queue size goes over some limits
     queue_warning_limits = 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9
@@ -458,8 +489,9 @@ class RecordBase:
             recording.timer.reset()
 
             # Optional pre-defined program for change of recording properties
-            if recording.program is not None:
-                recording.program.run()
+            if recording.programs is not None:
+                for program in recording.programs.values():
+                    recording.program.run()
 
             while not self.e_stop.is_set():
 

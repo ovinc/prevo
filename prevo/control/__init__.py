@@ -19,5 +19,5 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-from .control import Control, PeriodicControl
+from .control import Control, PeriodicControl, RecordingControl
 from .program import Program, Stairs, Teeth
