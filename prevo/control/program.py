@@ -82,7 +82,7 @@ class Program:
     def __init__(self,
                  control=None,
                  ppty='',
-                 repeat=1,
+                 repeat=0,
                  **steps):
         """Initiate temperature cycle(s) program on device.
 
@@ -95,7 +95,8 @@ class Program:
                            when it is defined later.
         - ppty (str): optional name of property that is being programmed
                       (for repr purposes only)
-        - repeat: number of times the cycle is repeated (int)
+        - repeat: number of times the cycle is repeated (int); if 0 (default),
+                  the program is done only once.
         - steps: kwargs/dict with the following keys:
             * durations: list tt of step durations (timedelta or str 'h:m:s')
             * p=, rh=, aw=, T=: list vv of step target values
@@ -114,9 +115,9 @@ class Program:
         ctrl = Control()  # see Control subclasses for details on instantiation
 
         # EITHER:
-        program = ctrl.program(durations=tt, p=pp, repeat=3)
+        program = ctrl.program(durations=tt, p=pp, repeat=2)
         # OR:
-        program = Program(ctrl, durations=tt, p=pp, repeat=3)
+        program = Program(ctrl, durations=tt, p=pp, repeat=2)
 
         creates the following program (each dot represents 30 min):
 
@@ -165,19 +166,19 @@ class Program:
 
         self.stop_event.clear()
 
-        for n in range(self.repeat):
+        for n in range(self.repeat + 1):
 
-            msg = f'------ PROGRAM --- NEW CYCLE {n+1} / {self.repeat}\n'
+            msg = f'------ PROGRAM ({self.ppty}) --- NEW CYCLE {n+1} / {self.repeat + 1}'
             self.control._manage_message(msg, force_print=True)
 
             for v1, v2, duration in zip(self.origins, self.targets, self.durations):
                 self.control._ramp(duration, **{self.quantity: (v1, v2)})
                 if self.stop_event.is_set():
-                    msg = '------ PROGRAM --- STOPPED'
+                    msg = f'------ PROGRAM ({self.ppty}) --- STOPPED'
                     self.control._manage_message(msg, force_print=True)
                     return
         else:
-            msg = '------ PROGRAM --- FINISHED'
+            msg = f'------ PROGRAM ({self.ppty}) --- FINISHED'
             self.control._manage_message(msg, force_print=True)
 
     def run(self):
@@ -204,13 +205,14 @@ class Program:
             t += dt
 
         ax.set_xlabel(f'time ({time_unit})')
-        ax.set_ylabel(f'{self.ppty}{self.quantity}')
+        ax.set_title(self.ppty)
+        ax.set_ylabel(f'{self.quantity}')
 
         fig.show()
 
     @property
     def cycle_duration(self):
-        """Duration of a single cycle (1 repeat) of the program."""
+        """Duration of a single cycle of the program."""
         dt = 0
         for duration in self.durations:
             dt += _format_time(duration)  # in seconds
@@ -219,7 +221,7 @@ class Program:
     @property
     def total_duration(self):
         """Duration of a all cycles including repeats."""
-        return self.repeat * self.cycle_duration
+        return (self.repeat + 1) * self.cycle_duration
 
     @property
     def running(self):
@@ -244,8 +246,9 @@ class Stairs(Program):
 
     def __init__(self,
                  control=None,
+                 ppty='',
                  duration=None,
-                 repeat=1,
+                 repeat=0,
                  **steps):
         """Specific program with a succession of constant setting plateaus.
 
@@ -256,11 +259,14 @@ class Stairs(Program):
                    # Note: Program will inherit possible inputs from the
                            Control object either upon instantiation or
                            when it is defined later.
+        - ppty (str): optional name of property that is being programmed
+                      (for repr purposes only)
         - duration: (str of type 'hh:mm:ss' or timedelta): if not None, sets
           the duration of every plateau to be the same. If None, a list of
           durations must be supplied within **steps (key 'durations').
 
-        - repeat: number of times the cycle is repeated (int)
+        - repeat: number of times the cycle is repeated (int); if 0 (default),
+                  the program is done only once.
 
         - **steps:
             - do not correspond to points in the program, but segments.
@@ -285,9 +291,9 @@ class Stairs(Program):
         ctrl = Control()  # see Control subclasses for details on instantiation
 
         # EITHER:
-        program = ctrl.stairs(duration='1::', rh=rh, repeat=2)
+        program = ctrl.stairs(duration='1::', rh=rh, repeat=1)
         # OR:
-        program = Stairs(ctrl, duration='1::', rh=rh, repeat=2)
+        program = Stairs(ctrl, duration='1::', rh=rh, repeat=1)
 
         creates the following program (each dot represents 15 min):
 
@@ -310,7 +316,7 @@ class Stairs(Program):
         ---------
         pp = [3170, 2338]
         tt = ['1::', '3::']
-        Control().stairs(durations=tt, rh=rh, repeat=3)
+        Control().stairs(durations=tt, rh=rh, repeat=2)
 
         Does the following when run (each dot represents 15 minutes):
 
@@ -336,7 +342,10 @@ class Stairs(Program):
 
         formatted_steps = {'durations': step_durations, qty: step_points}
 
-        super().__init__(control=control, repeat=repeat, **formatted_steps)
+        super().__init__(control=control,
+                         ppty=ppty,
+                         repeat=repeat,
+                         **formatted_steps)
 
 
 class Teeth(Program):
@@ -344,11 +353,12 @@ class Teeth(Program):
 
     def __init__(self,
                  control=None,
+                 ppty='',
                  slope=None,
                  slope_unit='/min',
-                 plateau_duration=None,
+                 plateau_duration='::',
                  start='plateau',
-                 repeat=1,
+                 repeat=0,
                  **steps):
         """Plateaus of fixed duration separated by ramps of constant slope.
 
@@ -359,6 +369,8 @@ class Teeth(Program):
                    # Note: Program will inherit possible inputs from the
                            Control object either upon instantiation or
                            when it is defined later.
+        - ppty (str): optional name of property that is being programmed
+                      (for repr purposes only)
         - slope: rate of change of the parameter specified in **steps. For
           example, if steps contains rh=..., the slope is in %RH / min, except
           if a different time unit is specified in slope_unit.
@@ -370,6 +382,9 @@ class Teeth(Program):
 
         - start: can be 'plateau' (default, start with a plateau) or 'ramp'
           (start directly with a ramp).
+
+        - repeat: number of times the cycle is repeated (int); if 0 (default),
+                  the program is done only once.
 
         - **steps:
             - correspond to the values of the plateaus.
@@ -383,9 +398,9 @@ class Teeth(Program):
         ctrl = Control()  # see Control subclasses for details on instantiation
 
         # EITHER:
-        program = ctrl.teeth(40, '/h', '1::', rh=rh, repeat=2)
+        program = ctrl.teeth(40, '/h', '1::', rh=rh, repeat=1)
         # OR:
-        program = Teeth(ctrl, 40, '/h', '1::', rh=rh, repeat=2)
+        program = Teeth(ctrl, 40, '/h', '1::', rh=rh, repeat=1)
 
         creates the following program (15 min / dot, ramps at 40%RH / hour):
 
@@ -405,7 +420,7 @@ class Teeth(Program):
         Example 2
         ---------
         pp = [3000, 2000, 3000, 1000]
-        Control().teeth(25, '/min', '1:20:', p=pp, start='ramp', repeat=2)
+        Control().teeth(25, '/min', '1:20:', p=pp, start='ramp', repeat=1)
 
         Does the following when run (20 min / dot, ramps at 25 Pa / min):
 
@@ -442,14 +457,17 @@ class Teeth(Program):
 
         formatted_steps = {'durations': step_durations, qty: step_points}
 
-        super().__init__(control, repeat=repeat, **formatted_steps)
+        super().__init__(control,
+                         ppty=ppty,
+                         repeat=repeat,
+                         **formatted_steps)
 
     def _slope_to_time(self, values):
         """values is a tuple (v1, v2) of start and end values."""
 
         v1, v2 = values
 
-        dvdt = self.slope / time_factors[f'/{self.slope_unit}']  # in qty / second
+        dvdt = self.slope / time_factors[self.slope_unit.strip('/')]  # in qty / second
 
         dt = abs((v2 - v1) / dvdt)  # ramp time in seconds
         h, m, s = _seconds_to_hms(dt)

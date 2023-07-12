@@ -51,7 +51,7 @@ A minimal example is provided below, to record pressure and temperature asynchro
 1) **Define the sensors**
 
     ```python
-    from prevo.record import SensorBase
+    from prevo.record import SensorBase, ControlledProperty
 
 
     class TemperatureSensor(SensorBase):
@@ -90,8 +90,6 @@ A minimal example is provided below, to record pressure and temperature asynchro
             super().__init__(Sensor=TemperatureSensor,
                              dt=10)  # by default, record every 10 sec
             self.file = 'Temperature.txt'
-            # Below, this allows the user to change time interval in real time
-            self.controlled_properties = 'timer.interval',
 
         def init_file(self, file):
             """Define if you want to write column titles etc.
@@ -110,17 +108,29 @@ A minimal example is provided below, to record pressure and temperature asynchro
             """
             pass
 
+    # For the pressure recording, one might want to also control the averaging
+    # of the data in real time. In this case, a ControlledProperty object needs
+    # to be defined with the attribute of the recording to be controlled,
+    # a readable representation of the property, and shorctut commands to
+    # interact with the property in the CLI
+
+    averaging = ControlledProperty(attribute='sensor.avg',
+                                   readable='Averaging',
+                                   commands=('avg',))
+
 
     class RecordingP(RecordingBase):
         """Recording pressure data periodically"""
 
         def __init__(self):
+            """By default, the time interval and the active status (on/off)
+            of the recording are controlled. Here we can also add control of
+            the averaging in real time"""
 
             super().__init__(Sensor=PressureSensor,
+                             ctrl_ppties=(averaging,),
                              dt=1)  # by default, record every second
             self.file = 'Pressure.txt'
-            # Here we can also control the averaging in real time
-            self.controlled_properties = 'timer.interval', 'sensor.avg'
 
         def init_file(self, file):
             """same as above"""
@@ -149,23 +159,13 @@ A minimal example is provided below, to record pressure and temperature asynchro
     # Keys must correspond to sensor names
     recordings = {'T': RecordingT(), 'P': RecordingP()}
 
-    # All properties that can be controlled by CLI
-    # (keys must correspond to some controlled_properties)
-    properties = {'timer.interval': {'repr': 'Δt (s)',
-                                     'commands': ('dt',),
-                                     },
-                  'sensor.avg': {'repr': 'Averaging',
-                                 'commands': ('avg',),
-                                 }
-                  }
-
     # Start recording. A CLI will appear; type '?' for help
     Record(recordings=recordings, properties=properties).start()
     ```
 
 Note: context managers also possible (i.e. define `__enter__` and `__exit__` in `Sensor` class) e.g. if sensors have to be opened once at the beginning and closed in the end; this is managed automatically by `RecordBase` if a context manager is defined.
 
-See docstrings for more help.
+See docstrings for more help and `Record.ipynb` for examples.
 
 
 Misc. info

@@ -32,7 +32,7 @@ import os
 # Non-standard imports
 from tqdm import tqdm
 import oclock
-from clivo import CommandLineInterface as ClI
+from clivo import CommandLineInterface, ControlledProperty, ControlledEvent
 
 # Local imports
 from .control import RecordingControl
@@ -53,10 +53,13 @@ def try_thread(function):
                 sensor_info = ''
             else:
                 sensor_info = f' for sensor "{name}"'
-            nmax, _ = os.get_terminal_size()
+            try:
+                nmax, _ = os.get_terminal_size()
+            except OSError:
+                nmax = 80
             print('\n')
             print('=' * nmax)
-            print(f'ERROR in {function.__name__}(){sensor_info}')
+            print(f'ERROR in {function.__name__}() {sensor_info}')
             print('-' * nmax)
             print_exc()
             print('=' * nmax)
@@ -110,6 +113,16 @@ class SensorBase(ABC):
             return data
 
 
+# =============== Default controlled properties for recordings ===============
+
+timer_ppty = ControlledProperty(attribute='timer.interval',
+                                readable='Δt (s)',
+                                commands=('dt',))
+
+active_ppty = ControlledProperty(attribute='active',
+                                 readable='Rec. ON',
+                                 commands=('on',))
+
 # ========================== Recording base class ============================
 
 
@@ -118,29 +131,36 @@ class RecordingBase(ABC):
 
     def __init__(self,
                  Sensor,
-                 dt,
+                 dt=1,
+                 path='.',
+                 ctrl_ppties=(),
                  active=True,
                  continuous=False,
                  warnings=False,
                  precise=False,
                  programs=None,
-                 program_controls=None):
+                 control_params=None):
         """Parameters:
 
         - Sensor: subclass of SensorBase.
-        - dt: time interval between readings.
+        - dt: time interval between readings (default 1s).
+        - path: directory in which data is recorded.
+        - ctrl_ppties: optional iterable of properties (ControlledProperty
+                       objects) to control on the recording in addition to
+                       default ones (time interval and active on/off)
         - active: if False, do not record data until self.active set to True.
         - continuous: if True, take data as fast as possible from sensor.
         - warnings: if True, print warnings of Timer (e.g. loop too short).
         - precise: if True, use precise timer in oclock (see oclock.Timer).
-        - programs: dict {ppty_name: program} with program an object of the
+        - programs: dict {ppty_cmd: program} with program an object of the
                     prevo.control.Program class or subclasses.
                     --> optional pre-defined temporal pattern of change of
                     properties of recording (e.g. define some times during
                     which sensor is active or not, or change time interval
                     between data points after some time, etc.)
-        - program_controls: dict {ppty_name: kwargs} of any kwargs to pass to
-                            the program controls (e.g. dt, range_limits, etc.)
+        - control_params: dict {ppty_name: kwargs} of any kwargs to pass to
+                          the program controls (e.g. dt, range_limits, etc.)
+                          (note: by default)
         """
         self.Sensor = Sensor
         self.name = Sensor.name
@@ -148,38 +168,50 @@ class RecordingBase(ABC):
                                   name=self.name,
                                   warnings=warnings,
                                   precise=precise)
+        self.path = Path(path)
 
         self.active = active  # can be set to False to temporarily stop recording from sensor
         self.continuous = continuous
 
-        self._init_programs(programs=programs,
-                            program_controls=program_controls)
-
-        # Subclasses must define the following attributes upon init ----------
-
-        # File (Path object) in which data is saved. The file is opened at the
-        # beginning of the recording and closed in the end.
+        # Subclasses must define upon init the file (Path object) in which
+        # data is saved. The file is opened at the beginning of the recording
+        # and closed in the end.
         self.file = None
 
-        # Iterable of the name of properties of the object that the CLI controls.
-        # e.g. 'timer.interval', 'averaging', etc.
-        self.controlled_properties = []
+        # Iterable of the recording properties that the program / CLI control.
+        # Possibility to add other properties in subclasses
+        # (need to be of type ControlledProperty or subclass)
+        self.controlled_properties = (timer_ppty, active_ppty) + ctrl_ppties
+        self._generate_ppty_dict()
+
+        # Optional temporal programs to make controlled properties evolve.
+        self._init_programs(programs=programs,
+                            control_params=control_params)
 
     # Private methods --------------------------------------------------------
 
-    def _init_programs(self, programs, program_controls):
+    def _generate_ppty_dict(self):
+        """Associate property commands to property objects"""
+        self.ppty_commands = {}
+        for ppty in self.controlled_properties:
+            for ppty_cmd in ppty.commands:
+                self.ppty_commands[ppty_cmd] = ppty
+
+    def _init_programs(self, programs, control_params):
         self.programs = programs
         if programs is None:
             return
-        for ppty, program in self.programs.items():
-            if program_controls is not None:
-                control_kwargs = program_controls.get(ppty, {})
+        for ppty_cmd, program in self.programs.items():
+            ppty = self.ppty_commands[ppty_cmd]
+            if control_params is not None:
+                control_kwargs = control_params.get(ppty_cmd, {})
             else:
                 control_kwargs = {}
-            log_filename = f'Control_Log_{self.name}_{ppty}.txt'
-            program.control = RecordingControl(recording=self.recording,
+            log_filename = f'Control_Log_{self.name}_{ppty.readable}.txt'
+            program.control = RecordingControl(recording=self,
                                                ppty=ppty,
                                                log_file=log_filename,
+                                               savepath=self.path,
                                                **control_kwargs)
 
     def _stop_programs(self):
@@ -187,6 +219,21 @@ class RecordingBase(ABC):
             return
         for program in self.programs.values():
             program.stop()
+
+    def _set_property(self, ppty, value):
+        """Set property of recording.
+
+        recording: RecordingBase object or subclass on which property is applied
+        ppty: ControlledProperty object or subclass.
+        value: value of property to apply.
+        """
+        if ppty not in self.controlled_properties:
+            return
+        try:
+            # avoids having to pass a convert function
+            exec(f'self.{ppty.attribute} = {value}')
+        except Exception as e:
+            print(f"WARNING: Could not set {ppty.readable} for {self.name} to {value}.\n Exception: {e}")
 
     # Compulsory methods to subclass -----------------------------------------
 
@@ -247,7 +294,6 @@ class RecordBase:
 
     def __init__(self,
                  recordings,
-                 properties=None,
                  path='.',
                  dt_save=1.9,
                  dt_request=0.7,
@@ -258,7 +304,7 @@ class RecordBase:
         Parameters
         ----------
         - recordings: dict {recording_name: recording_object}
-        - properties: dict of dicts of properties to control (see clivo.CLI)
+        - properties: tuple of properties (ControlledProperty or subclass)
         - path: directory in which data is recorded.
         - dt_save: how often (in seconds) queues are checked and written to files
                    (it is also how often files are open/closed)
@@ -270,11 +316,7 @@ class RecordBase:
                       or dt_P=60 to change only time interval of recording 'P')
         """
         self.recordings = recordings
-        self.properties = properties if properties else {}
-
-        self.property_commands = ClI._get_commands(self.properties)
-        self.object_properties = ClI._get_controlled_properties(self,
-                                                                self.recordings)
+        self.create_events()
 
         self.path = Path(path)
         self.path.mkdir(exist_ok=True)
@@ -284,24 +326,13 @@ class RecordBase:
         self.dt_check = dt_check
 
         # Check if user inputs particular initial settings for recordings
-        self.initial_property_settings = self.init_properties(ppty_kwargs)
-
-        self.e_stop = Event()  # event set to stop recording when needed.
-        self.e_graph = Event()  # event set to start plotting the data in real time
+        self.parse_initial_user_commands(ppty_kwargs)
 
         # Data is stored in a queue before being saved
         self.q_save = {name: Queue() for name in self.recordings}
 
         # Data queue for plotting when required
         self.q_plot = {name: Queue() for name in self.recordings}
-
-        self.events = {'graph': {'event': self.e_graph,
-                                 'commands': ('g', 'graph')
-                                 },
-                       'stop': {'event': self.e_stop,
-                                'commands': ('q', 'Q', 'quit')
-                                }
-                       }
 
         self.save_metadata()
 
@@ -344,38 +375,53 @@ class RecordBase:
     # ============================= INIT METHODS =============================
     # ------------------------------------------------------------------------
 
-    def init_properties(self, ppty_kwargs):
-        """Check if user input contains specific properties and apply them."""
+    def create_events(self):
+        """Create event objects managed by the CLI"""
+        self.e_stop = Event()  # event set to stop recording when needed.
+        self.e_graph = Event()  # event set to start plotting the data in real time
 
-        # Dict of dict managing initial settings passed by user
-        initial_ppty_settings = {name: {ppty_cmd: None
-                                        for ppty_cmd in self.property_commands}
-                                 for name in self.recordings}
+        graph_event = ControlledEvent(event=self.e_graph,
+                                      readable='graph',
+                                      commands=('g', 'graph'))
 
-        for ppty_cmd in self.property_commands:
+        stop_event = ControlledEvent(event=self.e_stop,
+                                     readable='stop',
+                                     commands=('q', 'Q', 'quit'))
 
-            # If generic input (e.g. 'dt=10'), set all recordings to that value
+        self.events = graph_event, stop_event
 
+    def parse_initial_user_commands(self, ppty_kwargs):
+        """Check if user input contains specific properties.
+
+        The values to apply for these properties are stored in a dict and
+        will be applied to each recording when launched.
+
+        If generic input (e.g. 'dt=10'), set all recordings to that value
+        If specific input (e.g. dt_P=10), update recording to that value
+        """
+        self.initial_ppty_settings = {name: {} for name in self.recordings}
+
+        global_commands = {}
+        specific_commands = {}
+
+        for cmd, value in ppty_kwargs.items():
             try:
-                value = ppty_kwargs[ppty_cmd]   # ppty_cmd is e.g. dt, avg etc.
-            except KeyError:
-                pass
+                ppty_cmd, name = cmd.split('_', maxsplit=1)  # e.g. dt_P = 10
+            except ValueError:                               # e.g. dt=10
+                global_commands[cmd] = value
             else:
-                for name in self.recordings:
-                    initial_ppty_settings[name][ppty_cmd] = value
+                specific_commands[name] = ppty_cmd, value
 
-            # If specific input (e.g. dt_P=10), update recording to that value
+        # Apply first global values to all recordings ------------------------
+        for ppty_cmd, value in global_commands.items():
+            for name, recording in self.recordings.items():
+                ppty = recording.ppty_commands[ppty_cmd]
+                self.initial_ppty_settings[name][ppty] = value
 
-            for name in self.recordings:
-                cmd = f'{ppty_cmd}_{name}'
-                try:
-                    value = ppty_kwargs[cmd]
-                except KeyError:
-                    pass
-                else:
-                    initial_ppty_settings[name][ppty_cmd] = value
-
-        return initial_ppty_settings
+        # Then apply commands to specific recordings if specified ------------
+        for name, (ppty_cmd, value) in specific_commands.items():
+            ppty = self.recordings[name].ppty_commands[ppty_cmd]
+            self.initial_ppty_settings[name][ppty] = value
 
     # ------------------------------------------------------------------------
     # =================== START RECORDING (MULTITHREAD) ======================
@@ -450,7 +496,7 @@ class RecordBase:
     @try_thread
     def cli(self):
         if self.recordings:  # if no recordings provided, no need to record.
-            command_input = ClI(self.recordings, self.properties, self.events)
+            command_input = CommandLineInterface(self.recordings, self.events)
             command_input.run()
         else:
             self.e_stop.set()
@@ -464,7 +510,6 @@ class RecordBase:
         # Init ---------------------------------------------------------------
 
         recording = self.recordings[name]
-        initial_ppty_settings = self.initial_property_settings[name]
         saving_queue = self.q_save[name]
         plotting_queue = self.q_plot[name]
         failed_reading = False  # True temporarily if P or T reading fails
@@ -480,18 +525,16 @@ class RecordBase:
             # before this point.
             # Note: (_set_property_base() does not do anything if the property
             # does not exist for the recording of interest)
-            for ppty_cmd, value in initial_ppty_settings.items():
-                if value is not None:
-                    ClI._set_property_base(self, ppty_cmd, name,
-                                           value, objects=self.recordings)
-
-            # Without this here, the first data points are irregularly spaced.
-            recording.timer.reset()
+            for ppty, value in self.initial_ppty_settings[name].items():
+                recording._set_property(ppty=ppty, value=value)
 
             # Optional pre-defined program for change of recording properties
             if recording.programs is not None:
                 for program in recording.programs.values():
-                    recording.program.run()
+                    program.run()
+
+            # Without this here, the first data points are irregularly spaced.
+            recording.timer.reset()
 
             while not self.e_stop.is_set():
 
@@ -531,6 +574,9 @@ class RecordBase:
                 finally:
                     if not recording.continuous:
                         recording.timer.checkpt()
+
+            else:
+                recording.on_stop()
 
     # ========================== Write data to file ==========================
 

@@ -93,22 +93,22 @@ class Control:
                 value_setpt = value_min
             else:
                 value_setpt = value_max
-            msg = (f'Required {qty}={value} outside of allowed'
-                   f'range {value_min}-{value_max}.\n'
+            msg = (f'Required {qty}={value} outside of allowed '
+                   f'range {value_min}-{value_max}. '
                    f'Setting kept at {value_setpt}.')
-            print(msg)
+            self._manage_message(msg)
             return value_setpt
 
     def _print_ramp_info(self, qty, v1, v2, duration):
         """Print information about new program step in console."""
-        msg = f'==> NEW STEP from {qty}={v1} to {qty}={v2} in {duration}\n'
+        msg = f'==> NEW STEP from {qty}={v1} to {qty}={v2} in {duration}'
         self._manage_message(msg)
 
     def _manage_message(self, msg, force_print=False):
         """Print in console and/or save to log file if options are activated"""
 
         t_str = datetime.now().isoformat(sep=' ', timespec='seconds')
-        line = f'[{t_str}] {msg}'
+        line = f'[{t_str}] {msg}\n'
 
         if self.log_file:
             try:
@@ -315,36 +315,33 @@ class PeriodicControl(Control):
 
     # ============================ Ramping methods ===========================
 
-    def _apply_setting_and_check_done(self, qty, value, duration):
+    def _apply_setting_and_check_done(self, qty, value, attempts=5):
         """Stay at a given value setting for the quantity of interest (blocking)
 
         Not a public method; is used by _ramp() and ramp().
         """
         target_setting = self._convert_input(**{qty: value})
-        t_ramp = _format_time(duration)
 
-        setting_success = False
-
-        while not setting_success and self.timer.elapsed_time <= t_ramp:
+        for _ in range(attempts):
 
             self._check_range_and_apply_setting(qty, value)
             actual_setting = self._try_read_setting()
             target_round = round(target_setting, self.round_digits)
 
             if actual_setting == target_round:
-                setting_success = True
+                return
 
-            else:
+            # This is to be able to stop the program even when the system
+            # is continuously trying to apply a setting.
+            if self.stop_event.is_set():
+                return
 
-                # This is to be able to stop the program even when the system
-                # is continuously trying to apply a setting.
-                if self.stop_event.is_set():
-                    return
+            self.timer.checkpt()
 
-                print(f'Target setting {target_round} and actual setting '
-                      f'{actual_setting} do not match.')
-
-                self.timer.checkpt()
+        else:
+            print(f'WARNING -- Could not apply setting: '
+                  f'target setting {target_round} and actual setting '
+                  f'{actual_setting} do not match.')
 
     def _ramp(self, duration, **values):
         """Ramp from val1 to val2 with given duration.
@@ -367,8 +364,8 @@ class PeriodicControl(Control):
             # If dwelling, no need to update the setting regularly.
             # Just apply it once, but make sure it has really been applied.
             dwell = True
-            self._apply_setting_and_check_done(qty, v2, duration)
-            self._manage_message(f'Dwelling started ({qty}={v2})\n')
+            self._apply_setting_and_check_done(qty, v2)
+            self._manage_message(f'Dwelling started ({qty}={v2})')
         else:
             dwell = False
 
@@ -383,14 +380,16 @@ class PeriodicControl(Control):
             self.timer.checkpt()
 
             if self.stop_event.is_set():
-                self._manage_message('==X Manual STOP\n')
+                self._manage_message('==X Manual STOP')
                 return
 
         else:
             if dwell:
-                self._manage_message('Dwelling finished\n')
+                self._manage_message('Dwelling finished')
             if not dwell:
                 self._check_range_and_apply_setting(qty, v2)
+                # below, avoids taking two datapoints in a row for programs
+                self.timer.checkpt()
 
     def ramp(self, duration, **values):
         """Ramp from val1 to val2 with given duration.
@@ -441,7 +440,8 @@ class RecordingControl(PeriodicControl):
         """Create PeriodicTemperatureControl object, with parameters:
 
         - recording: Recording object or subclass.
-        - ppty: name of property to control within that recording (e.g. 'sensor.fps')
+        - ppty: ControlledProperty object describing the property to control
+                within that recording
         - dt: time interval (s) between commands
         - range_limits: safety limits; tuple (min, max)
         - round_digits: number of digits after decimal point to keep/consider
@@ -467,17 +467,17 @@ class RecordingControl(PeriodicControl):
 
     def _apply_setting(self, value):
         """Set property value on recording."""
-        exec(f'self.recording.{self.ppty} = {value}')
+        exec(f'self.recording.{self.ppty.attribute} = {value}')
 
     def _read_setting(self):
         """Get property value of recording."""
         self._value = None  # exec does not work on local scope
-        exec(f'self._value = self.recording.{self.ppty}')
+        exec(f'self._value = self.recording.{self.ppty.attribute}')
         return self._value
 
     def _print_setting(self, value):
         """How to print information about current setting in console."""
-        return f'Setting: {self.ppty}={value}'
+        return f'Setting: {self.ppty.attribute}={value}'
 
     def _convert_input(self, **values):
         return values['values']
