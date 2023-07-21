@@ -334,8 +334,6 @@ class RecordBase:
         # Data queue for plotting when required
         self.q_plot = {name: Queue() for name in self.recordings}
 
-        self.save_metadata()
-
         # Any additional functions that need to be run along the other threads
         # (to be defined in subclasses)
         self.additional_threads = []
@@ -438,6 +436,8 @@ class RecordBase:
             self.threads.append(Thread(target=func))
 
     def start(self):
+
+        self.save_metadata()
 
         print(f'Recording started in folder {self.path.resolve()}')
 
