@@ -80,7 +80,7 @@ class Control:
 
     # -------- Private methods for class operation behind the scenes ---------
 
-    def _check_range_limits(self, qty, value):
+    def _check_range_limits(self, qty, value, message=True):
         """Return value if within limits, else return higher or lower limit."""
         vmin, vmax = self.range_limits
         value_min = vmin if vmin is not None else -inf
@@ -93,10 +93,11 @@ class Control:
                 value_setpt = value_min
             else:
                 value_setpt = value_max
-            msg = (f'Required {qty}={value} outside of allowed '
-                   f'range {value_min}-{value_max}. '
-                   f'Setting kept at {value_setpt}.')
-            self._manage_message(msg)
+            if message:
+                msg = (f'Required {qty}={value} outside of allowed '
+                       f'range {value_min}-{value_max}. '
+                       f'Setting kept at {value_setpt}.')
+                self._manage_message(msg)
             return value_setpt
 
     def _print_ramp_info(self, qty, v1, v2, duration):
@@ -315,12 +316,13 @@ class PeriodicControl(Control):
 
     # ============================ Ramping methods ===========================
 
-    def _apply_setting_and_check_done(self, qty, value, attempts=5):
+    def _apply_setting_and_check_done(self, qty, value, attempts=10):
         """Stay at a given value setting for the quantity of interest (blocking)
 
         Not a public method; is used by _ramp() and ramp().
         """
-        target_setting = self._convert_input(**{qty: value})
+        setting = self._convert_input(**{qty: value})
+        target_setting = self._check_range_limits(qty, setting, message=False)
 
         for _ in range(attempts):
 
@@ -339,9 +341,10 @@ class PeriodicControl(Control):
             self.timer.checkpt()
 
         else:
-            print(f'WARNING -- Could not apply setting: '
-                  f'target setting {target_round} and actual setting '
-                  f'{actual_setting} do not match.')
+            msg = 'WARNING -- Could not apply setting: '
+            msg += f'target setting {target_round} and actual setting '
+            msg += f'{actual_setting} do not match.'
+            self._manage_message(msg, force_print=True)
 
     def _ramp(self, duration, **values):
         """Ramp from val1 to val2 with given duration.
@@ -425,8 +428,6 @@ class PeriodicControl(Control):
 class RecordingControl(PeriodicControl):
     """Control of prevo Recordings objects"""
 
-    possible_inputs = 'values',
-
     def __init__(self,
                  recording=None,
                  ppty=None,
@@ -450,9 +451,12 @@ class RecordingControl(PeriodicControl):
         - save_log: if True (default), save succession of settings sent to
                     device into a .txt file
         - log_file: name of .txt file in which to save log of settings.
-                    (default: Control_Log.txt)
+                    (default: Control_Log_Recording.txt)
         - savepath: directory in which to save the log file
         """
+        self.ppty = ppty
+        self.possible_inputs = self.ppty.commands
+
         PeriodicControl.__init__(self,
                                  dt=dt,
                                  range_limits=range_limits,
@@ -463,7 +467,6 @@ class RecordingControl(PeriodicControl):
                                  savepath=savepath)
 
         self.recording = recording
-        self.ppty = ppty
 
     def _apply_setting(self, value):
         """Set property value on recording."""
@@ -480,4 +483,11 @@ class RecordingControl(PeriodicControl):
         return f'Setting: {self.ppty.attribute}={value}'
 
     def _convert_input(self, **values):
-        return values['values']
+        for command in self.ppty.commands:
+            try:
+                return values[command]
+            except KeyError:
+                pass
+        else:
+            input_key, = values.keys()
+            raise ValueError(f'Input {input_key} does not match {self.ppty.commands}.')

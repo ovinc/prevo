@@ -22,6 +22,8 @@
 # Standard library imports
 from datetime import timedelta
 from threading import Thread, Event
+from pathlib import Path
+import json
 
 # Other modules
 import oclock
@@ -81,7 +83,6 @@ class Program:
 
     def __init__(self,
                  control=None,
-                 ppty='',
                  repeat=0,
                  **steps):
         """Initiate temperature cycle(s) program on device.
@@ -93,8 +94,6 @@ class Program:
                    # Note: Program will inherit possible_inputs from the
                            Control object either upon instantiation or
                            when it is defined later.
-        - ppty (str): optional name of property that is being programmed
-                      (for repr purposes only)
         - repeat: number of times the cycle is repeated (int); if 0 (default),
                   the program is done only once.
         - steps: kwargs/dict with the following keys:
@@ -132,7 +131,6 @@ class Program:
         program.stop()   # stop program
         """
         self.control = control
-        self.ppty = ppty
         self.repeat = repeat
         self.durations = steps.pop('durations')  # list of step durations
 
@@ -168,17 +166,17 @@ class Program:
 
         for n in range(self.repeat + 1):
 
-            msg = f'------ PROGRAM ({self.ppty}) --- NEW CYCLE {n+1} / {self.repeat + 1}'
+            msg = f'------ PROGRAM ({self.quantity})--- NEW CYCLE {n + 1} / {self.repeat + 1}'
             self.control._manage_message(msg, force_print=True)
 
             for v1, v2, duration in zip(self.origins, self.targets, self.durations):
                 self.control._ramp(duration, **{self.quantity: (v1, v2)})
                 if self.stop_event.is_set():
-                    msg = f'------ PROGRAM ({self.ppty}) --- STOPPED'
+                    msg = f'------ PROGRAM ({self.quantity})--- STOPPED'
                     self.control._manage_message(msg, force_print=True)
                     return
         else:
-            msg = f'------ PROGRAM ({self.ppty}) --- FINISHED'
+            msg = f'------ PROGRAM ({self.quantity})--- FINISHED'
             self.control._manage_message(msg, force_print=True)
 
     def run(self):
@@ -205,10 +203,58 @@ class Program:
             t += dt
 
         ax.set_xlabel(f'time ({time_unit})')
-        ax.set_title(self.ppty)
         ax.set_ylabel(f'{self.quantity}')
 
         fig.show()
+
+    def copy(self):
+        """Return program with same characteristics of current one.
+
+        can be useful to run the same program on different sensors/devices.
+        """
+        return Program(**self.info)
+
+    def save(self, savepath='.', filename=None):
+        """Save program to JSON file. Use load() to regenerate program.
+
+        If filename is None, use default filename.
+        """
+        filename =  self.default_filename if filename is None else filename
+        file = Path(savepath) / filename
+        with open(file, 'w', encoding='utf8') as f:
+            json.dump(self.info, f, indent=4, ensure_ascii=False)
+
+    @classmethod
+    def load(cls, savepath='.', filename=None):
+        """Load program from file (filename NEEDS to be supplied here)."""
+        if filename is None:
+            raise ValueError('Filename needs to be provided')
+        file = Path(savepath) / filename
+        with open(file, 'r', encoding='utf8') as f:
+            info = json.load(f)
+        return cls(**info)
+
+    @staticmethod
+    def _to_json(file, data):
+        """Load python data (dict or list) from json file"""
+
+    @property
+    def info(self):
+        """Gathers useful info to regenerate the program in a dict.
+
+        Note: self.control not in there because not easily represented by
+        a string / number.
+        """
+        info_dict = {
+            'repeat': self.repeat,
+            'durations': self.durations,
+            self.quantity: self.origins,
+        }
+        return info_dict
+
+    @property
+    def default_filename(self):
+        return f'Program_{self.quantity}.json'
 
     @property
     def cycle_duration(self):
@@ -246,7 +292,6 @@ class Stairs(Program):
 
     def __init__(self,
                  control=None,
-                 ppty='',
                  duration=None,
                  repeat=0,
                  **steps):
@@ -259,8 +304,6 @@ class Stairs(Program):
                    # Note: Program will inherit possible inputs from the
                            Control object either upon instantiation or
                            when it is defined later.
-        - ppty (str): optional name of property that is being programmed
-                      (for repr purposes only)
         - duration: (str of type 'hh:mm:ss' or timedelta): if not None, sets
           the duration of every plateau to be the same. If None, a list of
           durations must be supplied within **steps (key 'durations').
@@ -343,7 +386,6 @@ class Stairs(Program):
         formatted_steps = {'durations': step_durations, qty: step_points}
 
         super().__init__(control=control,
-                         ppty=ppty,
                          repeat=repeat,
                          **formatted_steps)
 
@@ -353,7 +395,6 @@ class Teeth(Program):
 
     def __init__(self,
                  control=None,
-                 ppty='',
                  slope=None,
                  slope_unit='/min',
                  plateau_duration='::',
@@ -369,8 +410,6 @@ class Teeth(Program):
                    # Note: Program will inherit possible inputs from the
                            Control object either upon instantiation or
                            when it is defined later.
-        - ppty (str): optional name of property that is being programmed
-                      (for repr purposes only)
         - slope: rate of change of the parameter specified in **steps. For
           example, if steps contains rh=..., the slope is in %RH / min, except
           if a different time unit is specified in slope_unit.
@@ -458,7 +497,6 @@ class Teeth(Program):
         formatted_steps = {'durations': step_durations, qty: step_points}
 
         super().__init__(control,
-                         ppty=ppty,
                          repeat=repeat,
                          **formatted_steps)
 

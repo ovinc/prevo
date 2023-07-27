@@ -36,6 +36,7 @@ from clivo import CommandLineInterface, ControlledProperty, ControlledEvent
 
 # Local imports
 from .control import RecordingControl
+from .misc import NamesMgmt
 
 
 # ================================ MISC Tools ================================
@@ -78,10 +79,19 @@ class SensorError(Exception):
 class SensorBase(ABC):
     """Abstract base class for sensor acquisition."""
 
+    # If one wants to control specific properties of the sensor through
+    # the CLI in Record or through pre-defined programs, it's possible
+    # to specify them here, and they will be automatically added to
+    # the controlled_properties attribute of the corresponding Recording
+    # NOTE: this needs to be a class attribute and not an instance attribute,
+    # because these properties are checked before the Sensor object is
+    # instantiated.
+    controlled_properties = ()
+
     def __init__(self):
         # (optional) : specific sensor errors to catch, can be an Exception
         # class or an iterable of exceptions; if not specified in subclass,
-        # any exception is catched.
+        # any exception is caught.
         self.exceptions = Exception
 
     def __enter__(self):
@@ -98,10 +108,20 @@ class SensorBase(ABC):
         """Name of sensor, Must be a class attribute."""
         pass
 
-    @abstractmethod
     def _read(self):
-        """Read sensor, method must be defined in sensor subclass."""
-        pass
+        """Read sensor.
+
+        Either this method or _get_data() must be defined in subclasses.
+        """
+        with oclock.measure_time() as data:
+            data['values'] = self._get_data()
+        return data
+
+    def _get_data(self):
+        """Use this instead of subclassing _read() when you want the time
+        of measurement and uncertainty on time to be added automatically.
+        (useful when sensor does not return time information)"""
+        return ()
 
     def read(self):
         """Read sensor and throw SensorError if measurement fails."""
@@ -138,7 +158,7 @@ class RecordingBase(ABC):
                  continuous=False,
                  warnings=False,
                  precise=False,
-                 programs=None,
+                 programs=(),
                  control_params=None):
         """Parameters:
 
@@ -152,15 +172,16 @@ class RecordingBase(ABC):
         - continuous: if True, take data as fast as possible from sensor.
         - warnings: if True, print warnings of Timer (e.g. loop too short).
         - precise: if True, use precise timer in oclock (see oclock.Timer).
-        - programs: dict {ppty_cmd: program} with program an object of the
+        - programs: iterable of programs, which are object of the
                     prevo.control.Program class or subclasses.
                     --> optional pre-defined temporal pattern of change of
                     properties of recording (e.g. define some times during
                     which sensor is active or not, or change time interval
                     between data points after some time, etc.)
-        - control_params: dict {ppty_name: kwargs} of any kwargs to pass to
-                          the program controls (e.g. dt, range_limits, etc.)
-                          (note: by default)
+        - control_params: dict {command: kwargs} containing any kwargs to pass
+                          to the program controls (e.g. dt, range_limits, etc.)
+                          Note: if None, use default params
+                          (see RecordingControl class)
         """
         self.Sensor = Sensor
         self.name = Sensor.name
@@ -182,6 +203,7 @@ class RecordingBase(ABC):
         # Possibility to add other properties in subclasses
         # (need to be of type ControlledProperty or subclass)
         self.controlled_properties = (timer_ppty, active_ppty) + ctrl_ppties
+        self._add_sensor_controlled_properties()
         self._generate_ppty_dict()
 
         # Optional temporal programs to make controlled properties evolve.
@@ -189,6 +211,14 @@ class RecordingBase(ABC):
                             control_params=control_params)
 
     # Private methods --------------------------------------------------------
+
+    def _add_sensor_controlled_properties(self):
+        for ppty in self.Sensor.controlled_properties:
+            new_attribute = 'sensor.' + ppty.attribute
+            new_ppty = ControlledProperty(attribute=new_attribute,
+                                          readable=ppty.readable,
+                                          commands=ppty.commands)
+            self.controlled_properties += (new_ppty,)
 
     def _generate_ppty_dict(self):
         """Associate property commands to property objects"""
@@ -198,26 +228,29 @@ class RecordingBase(ABC):
                 self.ppty_commands[ppty_cmd] = ppty
 
     def _init_programs(self, programs, control_params):
-        self.programs = programs
-        if programs is None:
-            return
-        for ppty_cmd, program in self.programs.items():
+        self.programs = ()
+        for supplied_program in programs:
+
+            # In case same program is supplied to different recordings,
+            # because a program object cannot be run several times in parallel.
+            program = supplied_program.copy()
+
+            ppty_cmd = program.quantity
             ppty = self.ppty_commands[ppty_cmd]
             if control_params is not None:
                 control_kwargs = control_params.get(ppty_cmd, {})
             else:
                 control_kwargs = {}
-            log_filename = f'Control_Log_{self.name}_{ppty.readable}.txt'
+            log_filename = f'Control_Log_{self.name}_[{ppty.readable}].txt'
             program.control = RecordingControl(recording=self,
                                                ppty=ppty,
                                                log_file=log_filename,
                                                savepath=self.path,
                                                **control_kwargs)
+            self.programs += (program,)
 
     def _stop_programs(self):
-        if self.programs is None:
-            return
-        for program in self.programs.values():
+        for program in self.programs:
             program.stop()
 
     def _set_property(self, ppty, value):
@@ -295,6 +328,7 @@ class RecordBase:
     def __init__(self,
                  recordings,
                  path='.',
+                 on_start=(),
                  dt_save=1.9,
                  dt_request=0.7,
                  dt_check=1.3,
@@ -306,6 +340,10 @@ class RecordBase:
         - recordings: dict {recording_name: recording_object}
         - properties: tuple of properties (ControlledProperty or subclass)
         - path: directory in which data is recorded.
+        - on_start: optional iterable of objects with a .start() or .run()
+                    method, that need to be started at the same time as
+                    Record.start().
+                    Note: for now, start() and run() need to be non-blocking.
         - dt_save: how often (in seconds) queues are checked and written to files
                    (it is also how often files are open/closed)
         - dt_request: time interval (in seconds) for checking user requests
@@ -320,6 +358,7 @@ class RecordBase:
 
         self.path = Path(path)
         self.path.mkdir(exist_ok=True)
+        self.on_start = on_start
 
         self.dt_save = dt_save
         self.dt_request = dt_request
@@ -435,6 +474,20 @@ class RecordBase:
         for func in self.additional_threads:
             self.threads.append(Thread(target=func))
 
+    def start_supplied_objects(self):
+        """Start user-supplied non-blocking objects with a start() or run() method."""
+        for obj in self.on_start:
+            for method in 'run', 'start':
+                try:
+                    getattr(obj, method)()
+                except AttributeError:
+                    pass
+                else:
+                    break
+            else:
+                print(f'WARNING - {obj.__class__.__name} does not have a'
+                      f'run() or start() method --> not started. ')
+
     def start(self):
 
         self.save_metadata()
@@ -460,6 +513,9 @@ class RecordBase:
             self.cli_thread = Thread(target=self.cli)
             self.cli_thread.start()
 
+            # Start any other user-supplied objects (need to be nonblocking)
+            self.start_supplied_objects()
+
             # real time graph (triggered by CLI, runs in main thread due to
             # GUI backend problems if not) --------------------------------
             self.data_graph()
@@ -479,6 +535,9 @@ class RecordBase:
 
             for thread in self.threads:
                 thread.join()
+
+            for obj in self.on_start:
+                obj.stop()
 
             if error_occurred:
                 print('\nIMPORTANT: CLI still running. Input "q" to stop.\n')
@@ -523,15 +582,14 @@ class RecordBase:
             # Initial setting of properties is done here in case one of the
             # properties acts on the sensor object, which is not defined
             # before this point.
-            # Note: (_set_property_base() does not do anything if the property
+            # Note: (_set_property() does not do anything if the property
             # does not exist for the recording of interest)
             for ppty, value in self.initial_ppty_settings[name].items():
                 recording._set_property(ppty=ppty, value=value)
 
             # Optional pre-defined program for change of recording properties
-            if recording.programs is not None:
-                for program in recording.programs.values():
-                    program.run()
+            for program in recording.programs:
+                program.run()
 
             # Without this here, the first data points are irregularly spaced.
             recording.timer.reset()
@@ -716,3 +774,56 @@ class RecordBase:
                                            q_type='Plotting')
 
             self.e_stop.wait(self.dt_check)
+
+    @classmethod
+    def create(cls,
+               mode=None,
+               config=None,
+               recording_types=None,
+               recording_kwargs=None,
+               programs=None,
+               control_params=None,
+               path='.',
+               **kwargs):
+        """Factory method to generate a Record object from sensor names etc.
+
+        Parameters
+        ----------
+        - mode (default: all sensors): sensor names in any order (e.g. 'PTB1')
+               and potentially with separators (e.g. 'P-T-B1')
+        - config: CONFIG dict with at least keys 'sensors' and 'default names'
+        - recording_types: dict {sensor name: Recording} indicating what class
+                           of recording (RecordingBase class or subclass)
+                           needs to be instantiated for each sensor.
+        - recording_kwargs: dict {sensor name: kwargs}
+        - programs: dict {mode: programs} with mode same as the mode argument above
+                    (describing all sensor recordings that are concerned by the
+                    supplied programs), and programs an iterable of objects from
+                    the prevo.control.Program class or subclass.
+        - control_params: dict {command: kwargs} containing any kwargs to pass
+                          to the program controls (e.g. dt, range_limits, etc.)
+                          Note: if None, use default params
+                          (see RecordingControl class)
+        - **kwargs is any keyword arguments to pass to Record __init__
+          (including dt_save, ppty_kwargs etc.)
+        """
+        names = NamesMgmt(config).mode_to_names(mode)
+        programs = {} if programs is None else programs
+
+        all_programs = {name: () for name in names}
+        for pgm_mode, programs in programs.items():
+            pgm_names = NamesMgmt(config).mode_to_names(pgm_mode)
+            for name in pgm_names:
+                all_programs[name] += programs
+
+        recordings = {}
+        for name in names:
+            Recording = recording_types[name]
+            rec_kwargs = recording_kwargs[name]
+            recordings[name] = Recording(name=name,
+                                         path=path,
+                                         programs=all_programs[name],
+                                         control_params=control_params,
+                                         **rec_kwargs)
+
+        return cls(recordings=recordings, path=path, **kwargs)

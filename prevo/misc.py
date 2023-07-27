@@ -23,6 +23,7 @@ import time
 from threading import Thread
 from random import random
 from queue import Queue
+from statistics import mean
 
 import oclock
 import numpy as np
@@ -161,25 +162,35 @@ class PeriodicTimedSensor(PeriodicSensor):
 
 
 class DummyPressureSensor:
-    """3 channels: 2 (random) pressures in Pa, 1 in mbar"""
+    """3 channels: 2 (random) pressures in Pa, 1 in mbar.
 
-    def read(self):
-        val1 = 3170 + random()
-        val2 = 2338 + 2 * random()
-        val3 = 17.06 + 0.5 * random()
-        return {'P1 (Pa)': val1,
-                'P2 (Pa)': val2,
-                'P3 (mbar)': val3}
+    Possibility of averaging when reading values.
+    """
+
+    def read(self, avg=1):
+        val1, val2, val3 = [], [], []
+        for _ in range(int(avg)):
+            val1.append(3170 + random())
+            val2.append(2338 + 2 * random())
+            val3.append(17.06 + 0.5 * random())
+        return {'P1 (Pa)': mean(val1),
+                'P2 (Pa)': mean(val2),
+                'P3 (mbar)': mean(val3)}
 
 
 class DummyTemperatureSensor:
-    """2 channels of (random) temperatures in °C"""
+    """2 channels of (random) temperatures in °C.
 
-    def read(self):
-        val1 = 25 + 0.5 * random()
-        val2 = 22.3 + 0.3 * random()
-        return {'T1 (°C)': val1,
-                'T2 (°C)': val2}
+    Possibility of averaging when reading values.
+    """
+
+    def read(self, avg=1):
+        val1, val2 = [], []
+        for _ in range(int(avg)):
+            val1.append(25 + 0.5 * random())
+            val2.append(22.3 + 0.3 * random())
+        return {'T1 (°C)': mean(val1),
+                'T2 (°C)': mean(val2)}
 
 
 class DummyElectricalSensor:
@@ -209,18 +220,57 @@ class DummyCirculatedBath:
 
     def on(self):
         """Turn the bath on."""
-        self._status = 'on'
+        self.status = 'on'
         print('Bath ON')
 
     def off(self):
         """Turn the bath off."""
-        self._status = 'off'
+        self.status = 'off'
         print('Bath OFF')
 
     @property
     def tfluid(self):
         """Read fluid temperature in the bath."""
-        return self._setpt + 0.1 * (random() - 0.5)
+        return self.setpt + 0.1 * (random() - 0.5)
+
+
+class DummyPump:
+
+    def __init__(self):
+        self._running = False
+        self._normal_speed = False
+        self._rpm = 0
+
+    def on(self):
+        self._running = True
+        self._rpm = 30
+        print('Pump on')
+
+    def off(self):
+        self._running = False
+        self._rpm = 0
+        print('Pump off')
+
+    def speed(self, cmd):
+        """Set the speed of the pump, can be 'full' or 'standby'."""
+        if cmd == 'full':
+            self._normal_speed = True
+            self._rpm = 30
+            print('Full speed')
+        elif cmd == 'standby':
+            self._normal_speed = False
+            self._rpm = 7
+            print('Standby speed')
+        else:
+            raise ValueError("Commands can only be 'full' or 'standby'")
+
+    @property
+    def status(self):
+
+        return {'running': self._running,
+                'rpm': self._rpm,
+                'normal speed': self._normal_speed}
+
 
 
 class DummyLapseCamera(PeriodicSensor):
