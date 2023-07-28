@@ -210,6 +210,9 @@ class RecordingBase(ABC):
         self._init_programs(programs=programs,
                             control_params=control_params)
 
+    def __repr__(self):
+        return f'{self.__class__.__name__} ({self.name})'
+
     # Private methods --------------------------------------------------------
 
     def _add_sensor_controlled_properties(self):
@@ -337,7 +340,7 @@ class RecordBase:
 
         Parameters
         ----------
-        - recordings: dict {recording_name: recording_object}
+        - recordings: iterable of recording objects (RecordingBase or subclass)
         - properties: tuple of properties (ControlledProperty or subclass)
         - path: directory in which data is recorded.
         - on_start: optional iterable of objects with a .start() or .run()
@@ -353,7 +356,7 @@ class RecordBase:
                      (example dt=10 for changing all time intervals to 10
                       or dt_P=60 to change only time interval of recording 'P')
         """
-        self.recordings = recordings
+        self.recordings = {rec.name: rec for rec in recordings}
         self.create_events()
 
         self.path = Path(path)
@@ -823,15 +826,14 @@ class RecordBase:
             for name in pgm_names:
                 all_programs[name] += programs
 
-        recordings = {}
+        recordings = []
         for name in names:
             Recording = recording_types[name]
-            Sensor = all_sensors[name]
-            rec_kwargs = recording_kwargs[name]
-            recordings[name] = Recording(Sensor,
-                                         path=path,
-                                         programs=all_programs[name],
-                                         control_params=control_params,
-                                         **rec_kwargs)
+            recording = Recording(Sensor=all_sensors[name],
+                                  path=path,
+                                  programs=all_programs[name],
+                                  control_params=control_params,
+                                  **recording_kwargs[name])
+            recordings.append(recording)
 
         return cls(recordings=recordings, path=path, **kwargs)

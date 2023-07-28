@@ -11,13 +11,13 @@ Tools for graphical visualizations of data during recording are also provided (u
 
 The package contains various modules:
 
-- `prevo.record`: record sensors periodically, CLI interface, trigger GUI tools from CLI (see `examples/Record.ipynb` for examples)
+- `prevo.record`: record sensors periodically, CLI interface, trigger GUI tools from CLI,
 
-- `prevo.control`: control device properties, create pre-defined temporal evolutions of settings for sensors, devices and recording properties (see `examples/Control.ipynb` for examples)
+- `prevo.control`: control device properties, create pre-defined temporal evolutions of settings for sensors, devices and recording properties,
 
-- `prevo.plot`: plot numerical data in real time (regular plots, oscilloscope-like graphs, see `examples/LiveGraph.ipynb` for examples)
+- `prevo.plot`: plot numerical data in real time (regular plots, oscilloscope-like graphs etc.),
 
-- `prevo.viewers`: live view of images from camera-like sensors (see `examples/Viewers.ipynb` for examples)
+- `prevo.viewers`: live view of images from camera-like sensors,
 
 - `prevo.csv`: read / save data with CSV/TSV files
 
