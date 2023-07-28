@@ -36,7 +36,7 @@ from clivo import CommandLineInterface, ControlledProperty, ControlledEvent
 
 # Local imports
 from .control import RecordingControl
-from .misc import NamesMgmt
+from .misc import mode_to_names
 
 
 # ================================ MISC Tools ================================
@@ -151,8 +151,8 @@ class RecordingBase(ABC):
 
     def __init__(self,
                  Sensor,
-                 dt=1,
                  path='.',
+                 dt=1,
                  ctrl_ppties=(),
                  active=True,
                  continuous=False,
@@ -163,8 +163,8 @@ class RecordingBase(ABC):
         """Parameters:
 
         - Sensor: subclass of SensorBase.
-        - dt: time interval between readings (default 1s).
         - path: directory in which data is recorded.
+        - dt: time interval between readings (default 1s).
         - ctrl_ppties: optional iterable of properties (ControlledProperty
                        objects) to control on the recording in addition to
                        default ones (time interval and active on/off)
@@ -778,7 +778,8 @@ class RecordBase:
     @classmethod
     def create(cls,
                mode=None,
-               config=None,
+               sensors=(),
+               default_names=None,
                recording_types=None,
                recording_kwargs=None,
                programs=None,
@@ -791,7 +792,9 @@ class RecordBase:
         ----------
         - mode (default: all sensors): sensor names in any order (e.g. 'PTB1')
                and potentially with separators (e.g. 'P-T-B1')
-        - config: CONFIG dict with at least keys 'sensors' and 'default names'
+        - sensors: iterable of all sensor classes [Sensor1, Sensor2, etc.]
+        - default_names (optional): default sensor names to record if mode
+                                    is not supplied (left to None)
         - recording_types: dict {sensor name: Recording} indicating what class
                            of recording (RecordingBase class or subclass)
                            needs to be instantiated for each sensor.
@@ -807,20 +810,25 @@ class RecordBase:
         - **kwargs is any keyword arguments to pass to Record __init__
           (including dt_save, ppty_kwargs etc.)
         """
-        names = NamesMgmt(config).mode_to_names(mode)
+        all_sensors = {Sensor.name: Sensor for Sensor in sensors}
+        name_info = {'possible_names': all_sensors,
+                     'default_names': default_names}
+        names = mode_to_names(mode=mode, **name_info)
+
         programs = {} if programs is None else programs
 
         all_programs = {name: () for name in names}
         for pgm_mode, programs in programs.items():
-            pgm_names = NamesMgmt(config).mode_to_names(pgm_mode)
+            pgm_names = mode_to_names(mode=pgm_mode, **name_info)
             for name in pgm_names:
                 all_programs[name] += programs
 
         recordings = {}
         for name in names:
             Recording = recording_types[name]
+            Sensor = all_sensors[name]
             rec_kwargs = recording_kwargs[name]
-            recordings[name] = Recording(name=name,
+            recordings[name] = Recording(Sensor,
                                          path=path,
                                          programs=all_programs[name],
                                          control_params=control_params,

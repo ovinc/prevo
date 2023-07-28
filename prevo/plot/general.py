@@ -272,7 +272,6 @@ class NumericalGraphBase(GraphBase):
             for ax in self.axs.values():
                 ax.legend(loc='lower left')
 
-
     def create_empty_data(self):
         data = {}
         for name in self.names:
