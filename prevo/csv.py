@@ -32,8 +32,12 @@ except ModuleNotFoundError:
 
 class CsvFile:
 
-    def __init__(self, filename, column_names=None, column_formats=None,
-                 path='.', csv_separator='\t'):
+    def __init__(self,
+                 filename,
+                 column_names=None,
+                 column_formats=None,
+                 path='.',
+                 csv_separator='\t'):
         """Parameters:
 
         - file: file object (or str) to read.
@@ -91,16 +95,18 @@ class CsvFile:
         """Can be subclassed (here, assumes column titles)"""
         return self.number_of_lines() - 1
 
+    # ---------- Methods that work on already opened file managers -----------
+
+    def _init_file(self, file):
+        """What to do with file when recording is started."""
+        # Line below allows the user to re-start the recording and append data
+        if self.number_of_lines() == 0:
+            self._write_columns(file)
+
     def _write_columns(self, file):
         """How to init the file containing the data (when file already open)"""
         columns_str = f'{self.csv_separator.join(self.column_names)}\n'
         file.write(columns_str)
-
-    def write_columns(self):
-        """How to init the file containing the data."""
-        # Line below allows the user to re-start the recording and append data
-        with open(self.file, 'w', encoding='utf8') as file:
-            self._write_columns(file)
 
     def _write_line(self, data, file):
         """Save data to file when file is already open."""
@@ -108,78 +114,9 @@ class CsvFile:
         line_for_saving = self.csv_separator.join(data_str) + '\n'
         file.write(line_for_saving)
 
-    def write_line(self, data):
-        """Save data to file, when file has to be opened"""
-        # convert to list of str with the correct format
+    # ----------- Corresponding methods that open the file manager -----------
+
+    def init_file(self):
+        """What to do with file when recording is started."""
         with open(self.file, 'a', encoding='utf8') as file:
-            self._write_line(data, file)
-
-
-class RecordingToCsv:
-    """Recording data to CSV file.
-
-    Provides the following attributes and methods for RecordBase:
-    - self.file
-    - self.init_file()
-    - self.save()
-
-    Requires definition of the following methods in subclasses:
-    - measurement_to_data_iterable()
-    """
-
-    def __init__(self, filename, column_names, column_formats=None,
-                 path='.', csv_separator='\t'):
-        """Init Recording to CSV object"""
-
-        self.csv_file = CsvFile(filename=filename,
-                                path=path,
-                                csv_separator=csv_separator,
-                                column_names=column_names,
-                                column_formats=column_formats
-                                )
-
-        self.file = self.csv_file.file
-
-    def init_file(self, file):
-        # Line below allows the user to re-start the recording and append data
-        if self.csv_file.number_of_lines() == 0:
-            self.csv_file._write_columns(file)
-
-    def format_measurement(self, measurement):
-        """Format raw sensor data.
-
-        Here, we assume a standard measurement as a dict with keys
-        'time (unix)', 'dt (s)', 'values'
-        """
-        if measurement is None:
-            return
-        measurement['name'] = self.name
-        return measurement
-
-    def measurement_to_data_iterable(self, measurement):
-        """How to convert measurement to an iterable of data.
-
-        Input
-        -----
-        Measurement object
-
-        Output
-        ------
-        Iterable of data to be saved in CSV file
-
-        The length of the iterable must be equal to that of column_names.
-
-        Can be redefined in subclasses.
-
-        Here, we assume a standard measurement as a dict with keys
-        'time (unix)', 'dt (s)', 'values'
-        """
-        return (measurement['time (unix)'], measurement['dt (s)']) + measurement['values']
-
-    def save(self, measurement, file):
-        """Save to file"""
-        # Line below allows some recordings to not be saved if they give None
-        if measurement is None:
-            return
-        data_iterable = self.measurement_to_data_iterable(measurement)
-        self.csv_file._write_line(data_iterable, file)
+            self._init_file(file)

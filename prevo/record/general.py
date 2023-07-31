@@ -35,9 +35,8 @@ import oclock
 from clivo import CommandLineInterface, ControlledProperty, ControlledEvent
 
 # Local imports
-from .control import RecordingControl
-from .misc import mode_to_names
-
+from ..control import RecordingControl
+from ..misc import mode_to_names
 
 # ================================ MISC Tools ================================
 
@@ -194,10 +193,11 @@ class RecordingBase(ABC):
         self.active = active  # can be set to False to temporarily stop recording from sensor
         self.continuous = continuous
 
-        # Subclasses must define upon init the file (Path object) in which
-        # data is saved. The file is opened at the beginning of the recording
-        # and closed in the end.
-        self.file = None
+        # To be defined in subclass.
+        # Object that manages how data is written to files.
+        # Must have a .file attribute whith is a pathlib.Path object, and
+        # .init_file() method to create / init the file when recording starts
+        self.file_manager = None
 
         # Iterable of the recording properties that the program / CLI control.
         # Possibility to add other properties in subclasses
@@ -271,21 +271,13 @@ class RecordingBase(ABC):
         except Exception as e:
             print(f"WARNING: Could not set {ppty.readable} for {self.name} to {value}.\n Exception: {e}")
 
-    # Compulsory methods to subclass -----------------------------------------
+    # Compulsory methods / properties to subclass ----------------------------
 
     @abstractmethod
-    def init_file(self, file_manager):
-        """How to init the (already opened) data file (columns etc.).
-
-        file_manager is the file object yielded by the open() context manager.
-        """
-        pass
-
-    @abstractmethod
-    def save(self, measurement, file_manager):
+    def save(self, measurement, file):
         """Write data of measurement to (already open) file.
 
-        file_manager is the file object yielded by the open() context manager.
+        file is the file object yielded by the open() context manager.
         """
         pass
 
@@ -334,8 +326,7 @@ class RecordBase:
                  on_start=(),
                  dt_save=1.9,
                  dt_request=0.7,
-                 dt_check=1.3,
-                 **ppty_kwargs):
+                 dt_check=1.3):
         """Init base class for recording data
 
         Parameters
@@ -352,9 +343,6 @@ class RecordBase:
         - dt_request: time interval (in seconds) for checking user requests
                       (e.g. graph pop-up)
         - dt_check: time interval (in seconds) for checking queue sizes.
-        - ppty_kwargs: optional initial setting of properties.
-                     (example dt=10 for changing all time intervals to 10
-                      or dt_P=60 to change only time interval of recording 'P')
         """
         self.recordings = {rec.name: rec for rec in recordings}
         self.create_events()
@@ -366,9 +354,6 @@ class RecordBase:
         self.dt_save = dt_save
         self.dt_request = dt_request
         self.dt_check = dt_check
-
-        # Check if user inputs particular initial settings for recordings
-        self.parse_initial_user_commands(ppty_kwargs)
 
         # Data is stored in a queue before being saved
         self.q_save = {name: Queue() for name in self.recordings}
@@ -491,7 +476,17 @@ class RecordBase:
                 print(f'WARNING - {obj.__class__.__name} does not have a'
                       f'run() or start() method --> not started. ')
 
-    def start(self):
+    def start(self, **ppty_kwargs):
+        """Start recording.
+
+        Parameters
+        ----------
+        - ppty_kwargs: optional initial setting of properties.
+                     (example dt=10 for changing all time intervals to 10
+                      or dt_P=60 to change only time interval of recording 'P')
+        """
+        # Check if user inputs particular initial settings for recordings
+        self.parse_initial_user_commands(ppty_kwargs)
 
         self.save_metadata()
 
@@ -563,7 +558,6 @@ class RecordBase:
         else:
             self.e_stop.set()
             raise ValueError('No recordings provided. Stopping ...')
-
 
     @try_thread
     def data_read(self, name):
@@ -641,20 +635,6 @@ class RecordBase:
 
     # ========================== Write data to file ==========================
 
-    def _try_save(self, measurement, recording, file):
-        """Function to write data to file, used by data_save."""
-        try:
-            recording.save(measurement, file)
-        except Exception:
-            nmax, _ = os.get_terminal_size()
-            print('\n')
-            print('-' * nmax)
-            print(f'Data saving error for {recording.name}:')
-            print('(trying for new data at next time step)')
-            print_exc()
-            print('-' * nmax)
-            print('\n')
-
     @try_thread
     def data_save(self, name):
         """Save data that is stored in a queue by data_read."""
@@ -663,14 +643,13 @@ class RecordBase:
         saving_queue = self.q_save[name]
         saving_timer = oclock.Timer(interval=self.dt_save)
 
-        with open(recording.file, 'a', encoding='utf8') as file:
-            recording.init_file(file)
+        recording.file_manager.init_file()
 
         while not self.e_stop.is_set():
 
             # Open and close file at each cycle to be able to save periodically
             # and for other users/programs to access the data simultaneously
-            with open(recording.file, 'a', encoding='utf8') as file:
+            with open(recording.file_manager.file, 'a', encoding='utf8') as file:
 
                 while not saving_timer.interval_exceeded:
 
@@ -679,7 +658,8 @@ class RecordBase:
                     except Empty:
                         pass
                     else:
-                        self._try_save(measurement, recording, file)
+                        if measurement is not None:
+                            recording.save(measurement, file)
 
                     if self.e_stop.is_set():  # Move to buffering waitbar
                         break
@@ -695,13 +675,13 @@ class RecordBase:
         print(f'Data buffer saving started for {name}')
 
         # The nested statements below, similarly to above, ensure that
-        # recording.file is opened and close regularly to avoid loosing
-        # too much data if there is an error.
+        # recording.file_manager.file is opened and closed regularly to avoid
+        # loosing too much data if there is an error.
 
         with tqdm(total=saving_queue.qsize()) as pbar:
             while True:
                 try:
-                    with open(recording.file, 'a', encoding='utf8') as file:
+                    with open(recording.file_manager.file, 'a', encoding='utf8') as file:
                         saving_timer.reset()
                         while not saving_timer.interval_exceeded:
                             measurement = saving_queue.get(timeout=self.dt_save)
