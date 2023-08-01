@@ -222,9 +222,9 @@ class ImageRecord(RecordBase):
             if issubclass(recording.__class__, ImageRecording):
                 self.image_recordings[name] = recording
 
-    def save_metadata(self):
-        """Save sensor info and version of modules used"""
-        metadata_file = self.path / self.metadata_filename
+    def _save_metadata(self, filename):
+        """To be able to call save_metadata() with arbitrary filenames"""
+        metadata_file = self.path / filename
 
         if metadata_file.exists():
             metadata_file = self.increment_filename(metadata_file)
@@ -251,6 +251,9 @@ class ImageRecord(RecordBase):
                                nogit_ok=True,
                                nogit_warning=True)
 
+    def save_metadata(self):
+        """Save sensor info and version of modules used"""
+        self._save_metadata(filename=self.metadata_filename)
 
     def data_plot(self):
         """What to do when graph event is triggered"""

@@ -182,10 +182,9 @@ class NumericalRecord(RecordBase):
             if issubclass(recording.__class__, NumericalRecording):
                 self.numerical_recordings[name] = recording
 
-    def save_metadata(self):
-        """Save info on code version of modules used for the recording"""
-
-        metadata_file = self.path / self.metadata_filename
+    def _save_metadata(self, filename):
+        """To call save_metadata() with custom filenames"""
+        metadata_file = self.path / filename
 
         if metadata_file.exists():
             metadata_file = self.increment_filename(metadata_file)
@@ -197,6 +196,10 @@ class NumericalRecord(RecordBase):
                                notag_warning=True,
                                nogit_ok=True,
                                nogit_warning=True)
+
+    def save_metadata(self):
+        """Save info on code version of modules used for the recording"""
+        self._save_metadata(filename=self.metadata_filename)
 
     def data_plot(self):
         """What to do when graph event is triggered"""
