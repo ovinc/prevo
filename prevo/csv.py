@@ -40,23 +40,20 @@ class CsvFile:
                  csv_separator='\t'):
         """Parameters:
 
-        - file: file object (or str) to read.
+        - path: str or pathlib.Path object: folder in which file is located
+        - filename: name of file within path folder.
         - csv_separator: separator (str) used to separate data in file
-        - column_names (optional, for saving data): iterable of names
-        - column_formats (optional, even if column_names is provided)
+        - column_names (optional, for saving data): iterable of column names
+        - column_formats (optional): iterable of str formatings of data in columns
         """
         self.path = Path(path)
         self.file = self.path / filename
         self.csv_separator = csv_separator
+        self.column_names = column_names
+        self.column_formats = column_formats
 
-        if column_names is not None:
-
-            self.column_names = column_names
-
-            if column_formats is None:
-                self.column_formats = ('',) * len(column_names)
-            else:
-                self.column_formats = column_formats
+        if column_formats is None and self.column_names is not None:
+            self.column_formats = ('',) * len(column_names)
 
     def load(self, nrange=None):
         """Load data recorded in path, possibly with a range of indices (n1, n2).
@@ -105,6 +102,8 @@ class CsvFile:
 
     def _write_columns(self, file):
         """How to init the file containing the data (when file already open)"""
+        if self.column_names is None:
+            return
         columns_str = f'{self.csv_separator.join(self.column_names)}\n'
         file.write(columns_str)
 

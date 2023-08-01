@@ -42,24 +42,23 @@ Record sensors periodically
 ===========================
 
 For using the package for asynchronous recording of data, three base classes must/can be subclassed:
-- `SensorBase` (requires subclassing)
-- `RecordingBase` (requires subclassing)
-- `RecordBase` (can be used as is or be subclassed)
+- `SensorBase`
+- `RecordingBase` (children: `NumericalRecording`, `ImageRecording`)
+- `RecordBase` (children: `NumericalRecord`, `ImageRecord`)
 
-A minimal example is provided below, to record pressure and temperature asynchronously, assuming the user already has classes (`Temp`, `Gauge`) to take single-point measurements (it could be functions as well). See `examples/Record.ipynb` for an actual working example. Let's assume that the pressure measurement also has an `averaging` parameter to smooth the data.
+A minimal example is provided below, to record pressure and temperature asynchronously into a CSV file, assuming the user already has classes (`Temp`, `Gauge`) to take single-point measurements (it could be functions as well). See `examples/Record.ipynb` for more detailed examples, including periodic recording of images from several cameras.
 
 1) **Define the sensors**
 
     ```python
-    from prevo.record import SensorBase, ControlledProperty
+    from prevo.record import SensorBase
 
 
     class TemperatureSensor(SensorBase):
 
         name = 'T'
 
-        def _read(self):
-            """This method must have no arguments"""
+        def _get_data(self):
             return Temp.read()
 
 
@@ -67,105 +66,48 @@ A minimal example is provided below, to record pressure and temperature asynchro
 
         name = 'P'
 
-        def __init__(self):
-            self.avg = 10  # default value
-
-        def _read(self):
+        def _get_data(self):
             return Gauge.read(averaging=self.avg)
     ```
 
 1) **Define the individual recordings**
 
-    Note: subclassing can help significantly reduce the code below.
-
     ```python
-    from prevo.record import RecordingBase
+    from prevo.record.numerical import NumericalRecording
 
+    # Because timestamp and time uncertaintyare added automatically in data
+    # Can be renamed to have different time column titles in csv file.
+    time_columns = ('time (unix)', 'dt (s)')
 
-    class RecordingT(RecordingBase):
-        """Recording temperature data periodically"""
+    # Note: NumericalRecording can also be subclassed for simpler use
+    # (see examples/Record.ipynb Jupyter notebook)
 
-        def __init__(self):
+    recording_P = NumericalRecording(
+        Sensor=PressureSensor,
+        filename='Pressure.csv',
+        column_names=time_columns + ('P (mbar)',),
+    )
 
-            super().__init__(Sensor=TemperatureSensor,
-                             dt=10)  # by default, record every 10 sec
-            self.file = 'Temperature.txt'
-
-        def init_file(self, file):
-            """Define if you want to write column titles etc.
-            (assuming the file is already open)
-            """
-            pass
-
-        def format_measurement(self, data):
-            """Define here how to format data from Sensor._read().
-            (e.g., add time information, etc.). Returns a 'measurement'."""
-            pass
-
-        def save(self, measurement, file):
-            """Define here how to save the measurement above into self.file.
-            (assuming the file is already open)
-            """
-            pass
-
-    # For the pressure recording, one might want to also control the averaging
-    # of the data in real time. In this case, a ControlledProperty object needs
-    # to be defined with the attribute of the recording to be controlled,
-    # a readable representation of the property, and shorctut commands to
-    # interact with the property in the CLI
-
-    averaging = ControlledProperty(attribute='sensor.avg',
-                                   readable='Averaging',
-                                   commands=('avg',))
-
-
-    class RecordingP(RecordingBase):
-        """Recording pressure data periodically"""
-
-        def __init__(self):
-            """By default, the time interval and the active status (on/off)
-            of the recording are controlled. Here we can also add control of
-            the averaging in real time"""
-
-            super().__init__(Sensor=PressureSensor,
-                             ctrl_ppties=(averaging,),
-                             dt=1)  # by default, record every second
-            self.file = 'Pressure.txt'
-
-        def init_file(self, file):
-            """same as above"""
-            pass
-
-        def format_measurement(self, data):
-            """same as above"""
-            pass
-
-        def save(self):
-            """same as above"""
-            pass
+    recording_T = NumericalRecording(
+        Sensor=TemperatureSensor,
+        filename='Temperature.csv',
+        column_names=time_columns + ('T (°C)',),
+    )
     ```
 
-1) **Define and start asynchronous recording**
+1) **Define and start asynchronous recording of all sensors**
 
     ```python
-    from prevo.record import RecordBase
+    from prevo.record.numerical import NumericalRecord
 
-
-    class Record(RecordBase):
-        """Options exist to add metadata saving or graphing"""
-        pass
-
-
-    # Keys must correspond to sensor names
-    recordings = {'T': RecordingT(), 'P': RecordingP()}
-
-    # Start recording. A CLI will appear; type '?' for help
-    Record(recordings=recordings, properties=properties).start()
+    recordings = recording_P, recording_T
+    record = NumericalRecord(recordings)
+    record.start(dt=2)  # time interval of 2 seconds for both sensors
     ```
 
-Note: context managers also possible (i.e. define `__enter__` and `__exit__` in `Sensor` class) e.g. if sensors have to be opened once at the beginning and closed in the end; this is managed automatically by `RecordBase` if a context manager is defined.
+Note: context managers also possible (i.e. define `__enter__` and `__exit__` in `Sensor` class) e.g. if sensors have to be opened once at the beginning and closed in the end.
 
-See docstrings for more help and `Record.ipynb` for examples.
+Many other options and customizations exist (e.g. live view of data, sensor properties controlled in real time in CLI, etc.). See docstrings for more help and `examples/Record.ipynb` for examples.
 
 
 Misc. info
@@ -182,6 +124,7 @@ Module requirements
 - tzlocal < 3.0
 - oclock >= 1.2.2 (timing tools)
 - clivo >= 0.4.0 (command line interface)
+- gittools >= 0.6.0 (metadata saving tools)
 - matplotlib >= 3.1 (due to `cache_frame_data` option in `FuncAnimation`)
 - numpy
 

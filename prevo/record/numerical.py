@@ -34,15 +34,45 @@ class NumericalRecording(RecordingBase):
     """Recording class that saves numerical sensor data to csv files."""
 
     def __init__(self,
+                 Sensor,
                  filename,
-                 *args,
+                 path='.',
                  column_names=None,
                  column_formats=None,
-                 path='.',
                  csv_separator='\t',
                  **kwargs):
+        """Init NumericalRecording object.
 
-        super().__init__(*args, **kwargs)
+        Parameters
+        ----------
+        - Sensor: subclass of SensorBase.
+        - filename: name of csv/tsv file in which data will be saved.
+        - column_names: iterable of str (name of columns in csv file)
+        - column_formats: iterable of str (optional, str formatting)
+        - csv_separator: character to separate columns in CSV file.
+
+        Additional kwargs from RecordingBase:
+        - path: directory in which csv/tsv file will be created.
+        - dt: time interval between readings (default 1s).
+        - ctrl_ppties: optional iterable of properties (ControlledProperty
+                       objects) to control on the recording in addition to
+                       default ones (time interval and active on/off)
+        - active: if False, do not record data until self.active set to True.
+        - continuous: if True, take data as fast as possible from sensor.
+        - warnings: if True, print warnings of Timer (e.g. loop too short).
+        - precise: if True, use precise timer in oclock (see oclock.Timer).
+        - programs: iterable of programs, which are object of the
+                    prevo.control.Program class or subclasses.
+                    --> optional pre-defined temporal pattern of change of
+                    properties of recording (e.g. define some times during
+                    which sensor is active or not, or change time interval
+                    between data points after some time, etc.)
+        - control_params: dict {command: kwargs} containing any kwargs to pass
+                          to the program controls (e.g. dt, range_limits, etc.)
+                          Note: if None, use default params
+                          (see RecordingControl class)
+        """
+        super().__init__(Sensor=Sensor, path=path, **kwargs)
 
         self.file_manager = CsvFile(filename=filename,
                                     column_names=column_names,
@@ -96,16 +126,44 @@ class NumericalRecord(RecordBase):
     """Class managing simultaneous temporal recordings of numerical sensors"""
 
     def __init__(self,
-                 *args,
-                 metadata_filename='Metadata.json',
+                 recordings,
+                 metadata_filename='Numerical_Metadata.json',
                  checked_modules=(),
                  data_types=None,
                  dt_graph=0.1,
                  graph_colors=None,
                  dirty_ok=True,
                  **kwargs):
-        """If testing, do not raise errors if modules are dirty"""
-        super().__init__(*args, **kwargs)
+        """Init NumericalRecord object.
+
+        Parameters
+        ----------
+        - recordings: iterable of recording objects (RecordingBase or subclass)
+        - metadata_filename: name of .json file in which metadata is saved
+        - checked_modules: iterable of python modules, the version of which
+                           will be saved in metadata, in addition to prevo.
+        - data_types: iterable of data types (for selecting window in which
+                      which to plot data when graphs are active);
+                      if not supplied, graphs can not be instantiated.
+        - dt_graph: time interval to refresh numerical graph.
+        - graph_colors: dict of graph colors for numerical graph
+                        (see prevo.plot)
+        - dirty_ok: if False, record cannot be started if git repositories are
+                    not clean (commited).
+
+        Additional kwargs from RecordingBase:
+        - path: directory in which data is recorded.
+        - on_start: optional iterable of objects with a .start() or .run()
+                    method, that need to be started at the same time as
+                    Record.start().
+                    Note: for now, start() and run() need to be non-blocking.
+        - dt_save: how often (in seconds) queues are checked and written to files
+                   (it is also how often files are open/closed)
+        - dt_request: time interval (in seconds) for checking user requests
+                      (e.g. graph pop-up)
+        - dt_check: time interval (in seconds) for checking queue sizes.
+        """
+        super().__init__(recordings=recordings, **kwargs)
         self.metadata_filename = metadata_filename
         self.checked_modules = set((prevo,) + tuple(checked_modules))
 

@@ -268,6 +268,13 @@ class DummyLapseCamera(PeriodicSensor):
     name = 'Mock Lapse Camera'
 
     def _read(self):
-        """Return image in a dict (see explanation below)"""
+        """Return image in a dict"""
         img = np.random.randint(256, size=(480, 640), dtype='uint8')
         return {'image': img}
+
+    def read(self):
+        """Return dict with image and timestamp"""
+        with oclock.measure_time() as data:
+            data['image'] = self._read()['image']
+        return {'image': data['image'],
+                'timestamp': data['time (unix)']}

@@ -159,7 +159,10 @@ class RecordingBase(ABC):
                  precise=False,
                  programs=(),
                  control_params=None):
-        """Parameters:
+        """Init Recording object.
+
+        Parameters
+        ----------
 
         - Sensor: subclass of SensorBase.
         - path: directory in which data is recorded.
@@ -190,7 +193,7 @@ class RecordingBase(ABC):
                                   precise=precise)
         self.path = Path(path)
 
-        self.active = active  # can be set to False to temporarily stop recording from sensor
+        self._active = active  # can be set to False to temporarily stop recording from sensor
         self.continuous = continuous
 
         # To be defined in subclass.
@@ -202,7 +205,19 @@ class RecordingBase(ABC):
         # Iterable of the recording properties that the program / CLI control.
         # Possibility to add other properties in subclasses
         # (need to be of type ControlledProperty or subclass)
-        self.controlled_properties = (timer_ppty, active_ppty) + ctrl_ppties
+        if self.continuous:
+            # If sensor instantiated as continuous (e.g. streaming cameras)
+            # we assume that the timer is internally controlled in the sensor
+            # so that it does not make sense to control the time interval
+            # from the CLI.
+            # If one has a sensor when one wants to switch from continuous
+            # to not continuous, it's better to instantiate it as not
+            # continuous (possibly with on=False) and then switch to
+            # continuous and on=True.
+            default_ppties = (active_ppty,)
+        else:
+            default_ppties = (timer_ppty, active_ppty)
+        self.controlled_properties = default_ppties + ctrl_ppties
         self._add_sensor_controlled_properties()
         self._generate_ppty_dict()
 
@@ -212,6 +227,16 @@ class RecordingBase(ABC):
 
     def __repr__(self):
         return f'{self.__class__.__name__} ({self.name})'
+
+    @property
+    def active(self):
+        """In case a bunch of things (e.g. sensor start/stop) need to be done
+        when changing the active property --> subclass this"""
+        return self._active
+
+    @active.setter
+    def active(self, value):
+        self._active = value
 
     # Private methods --------------------------------------------------------
 
@@ -332,7 +357,6 @@ class RecordBase:
         Parameters
         ----------
         - recordings: iterable of recording objects (RecordingBase or subclass)
-        - properties: tuple of properties (ControlledProperty or subclass)
         - path: directory in which data is recorded.
         - on_start: optional iterable of objects with a .start() or .run()
                     method, that need to be started at the same time as

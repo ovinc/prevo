@@ -45,7 +45,7 @@ from matplotlib.animation import FuncAnimation
 
 bgcolor = '#485a6a'
 textcolor = '#e7eff6'
-fontfamily = "Garamond"
+fontfamily = "serif"
 
 
 # =============================== Base classes ===============================

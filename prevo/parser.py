@@ -21,7 +21,6 @@
 
 
 import argparse
-from ast import parse
 
 
 def parse_function(functions,
@@ -94,5 +93,5 @@ def parse_function(functions,
         try:
             args.append(parsed.function)
             return functions[default_function](*args, **kwargs)
-        except Exception:
-            print('Unknown command')
+        except Exception as e:
+            print(f'Unknown command (Error: {e})')
