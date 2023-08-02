@@ -122,7 +122,7 @@ Module requirements
 
 - tqdm
 - tzlocal < 3.0
-- oclock >= 1.2.2 (timing tools)
+- oclock >= 1.3.2 (timing tools)
 - clivo >= 0.4.0 (command line interface)
 - gittools >= 0.6.0 (metadata saving tools)
 - matplotlib >= 3.1 (due to `cache_frame_data` option in `FuncAnimation`)

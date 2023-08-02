@@ -134,7 +134,7 @@ class SensorBase(ABC):
 
 # =============== Default controlled properties for recordings ===============
 
-timer_ppty = ControlledProperty(attribute='timer.interval',
+timer_ppty = ControlledProperty(attribute='interval',
                                 readable='Δt (s)',
                                 commands=('dt',))
 
@@ -157,6 +157,7 @@ class RecordingBase(ABC):
                  continuous=False,
                  warnings=False,
                  precise=False,
+                 immediate=True,
                  programs=(),
                  control_params=None):
         """Init Recording object.
@@ -174,6 +175,9 @@ class RecordingBase(ABC):
         - continuous: if True, take data as fast as possible from sensor.
         - warnings: if True, print warnings of Timer (e.g. loop too short).
         - precise: if True, use precise timer in oclock (see oclock.Timer).
+        - immediate: if False, changes in the timer (e.g interval) occur
+                     at the next timestep. If True, a new data point is
+                     taken immediately.
         - programs: iterable of programs, which are object of the
                     prevo.control.Program class or subclasses.
                     --> optional pre-defined temporal pattern of change of
@@ -191,6 +195,7 @@ class RecordingBase(ABC):
                                   name=self.name,
                                   warnings=warnings,
                                   precise=precise)
+        self.immediate = immediate
         self.path = Path(path)
 
         self._active = active  # can be set to False to temporarily stop recording from sensor
@@ -237,6 +242,15 @@ class RecordingBase(ABC):
     @active.setter
     def active(self, value):
         self._active = value
+
+    @property
+    def interval(self):
+        """Timer interval for the sampling of data from the sensor"""
+        return self.timer.interval
+
+    @interval.setter
+    def interval(self, value):
+        self.timer.set_interval(value, immediate=self.immediate)
 
     # Private methods --------------------------------------------------------
 
@@ -659,6 +673,27 @@ class RecordBase:
 
     # ========================== Write data to file ==========================
 
+    @staticmethod
+    def _try_save(measurement, recording, file, attempts=3):
+        """Try saving data. If not, ignore"""
+        error = False
+        for attempt in range(attempts):
+            try:
+                recording.save(measurement, file)
+            except Exception as e:
+                error = True
+                print(f'Error saving {measurement} for {recording.name}: {e}. '
+                      f'Attempt {attempt + 1}/{attempts}')
+            else:
+                if error:
+                    print(f'Success saving {measurement} for {recording.name} '
+                          f'at attempt {attempt + 1}')
+                return
+        else:
+            print(f'Impossible saving {measurement} for {recording.name}; '
+                  'will be missing from data')
+
+
     @try_thread
     def data_save(self, name):
         """Save data that is stored in a queue by data_read."""
@@ -683,7 +718,7 @@ class RecordBase:
                         pass
                     else:
                         if measurement is not None:
-                            recording.save(measurement, file)
+                            self._try_save(measurement, recording, file)
 
                     if self.e_stop.is_set():  # Move to buffering waitbar
                         break

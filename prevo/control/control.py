@@ -298,9 +298,9 @@ class PeriodicControl(Control):
         final_setting = self._check_range_limits(qty, target_setting)
         try:
             self.apply_setting(final_setting)
-        except Exception:
+        except Exception as e:
             t_str = datetime.now().isoformat(sep=' ', timespec='seconds')
-            print(f'Impossible to apply setting {qty}={value} ({t_str}).')
+            print(f'Impossible to apply setting {qty}={value} ({t_str}).\n{e}')
         else:
             self.print_setting(final_setting)
 

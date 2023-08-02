@@ -61,6 +61,9 @@ class NumericalRecording(RecordingBase):
         - continuous: if True, take data as fast as possible from sensor.
         - warnings: if True, print warnings of Timer (e.g. loop too short).
         - precise: if True, use precise timer in oclock (see oclock.Timer).
+        - immediate: if False, changes in the timer (e.g interval) occur
+                     at the next timestep. If True, a new data point is
+                     taken immediately.
         - programs: iterable of programs, which are object of the
                     prevo.control.Program class or subclasses.
                     --> optional pre-defined temporal pattern of change of
