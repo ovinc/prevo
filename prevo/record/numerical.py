@@ -134,7 +134,9 @@ class NumericalRecord(RecordBase):
                  checked_modules=(),
                  data_types=None,
                  dt_graph=0.1,
+                 graph_legends=None,
                  graph_colors=None,
+                 graph_linestyle='.',
                  dirty_ok=True,
                  **kwargs):
         """Init NumericalRecord object.
@@ -151,6 +153,9 @@ class NumericalRecord(RecordBase):
         - dt_graph: time interval to refresh numerical graph.
         - graph_colors: dict of graph colors for numerical graph
                         (see prevo.plot)
+        - graph_legends: dict of graph legends for numerical graph
+                         (see prevo.plot)
+        - graph_linestyle: linestyle of data on numerical graph (e.g. '.-')
         - dirty_ok: if False, record cannot be started if git repositories are
                     not clean (commited).
 
@@ -173,7 +178,9 @@ class NumericalRecord(RecordBase):
         # Graphing options -------------
         self.data_types = data_types
         self.dt_graph = dt_graph
+        self.graph_legends = graph_legends
         self.graph_colors = graph_colors
+        self.graph_linestyle = graph_linestyle
 
         self.dirty_ok = dirty_ok
         self.get_numerical_recordings()
@@ -213,7 +220,9 @@ class NumericalRecord(RecordBase):
 
         graph = NumericalGraph(names=self.numerical_recordings,
                                data_types=self.data_types,
+                               legends=self.graph_legends,
                                colors=self.graph_colors,
+                               linestyle=self.graph_linestyle,
                                data_as_array=False)
 
         # In case the queue contains other measurements than numerical

@@ -269,8 +269,9 @@ class NumericalGraphBase(GraphBase):
                 self.lines_list.append(line)
 
         if self.legends:
+            legend_clr = self.colors.get('legend')
             for ax in self.axs.values():
-                ax.legend(loc='lower left')
+                ax.legend(loc='lower left', facecolor=legend_clr)
 
     def create_empty_data(self):
         data = {}
@@ -329,7 +330,7 @@ class UpdateGraphBase:
         if self.e_graph:
             self.e_graph.clear()
 
-    def plot_new_data(self, i):
+    def plot_new_data(self, i=0):
         """define what to do at each loop of the matplotlib animation."""
 
         if self.e_stop:

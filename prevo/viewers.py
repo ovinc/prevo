@@ -763,6 +763,8 @@ class TkMultipleViewer(MultipleViewer):
                  e_stop=None,
                  dt_graph=0.01,
                  Viewer=TkSingleViewer,
+                 root=None,
+                 fit_to_screen=True,
                  **kwargs):
         """Parameters:
 
@@ -770,10 +772,13 @@ class TkMultipleViewer(MultipleViewer):
         - e_stop: stopping event (threading.Event or equivalent)
         - dt_graph: interval (s) to update Tkinter window
         - Viewer: which Viewer to use (e.g. TkSingleViewer, TkStreamViewer, etc.)
+        - root: Tkinter parent in which to display viewer (if not, tk.Tk())
+        - fit_to_screen: maximize window size when instantiated
         - **kwargs: any optional keyword arguments required by the Viewer.
         """
-        self.root = tk.Tk()
+        self.root = tk.Tk() if root is None else root
         self.root.configure(bg=bgcolor)
+        self.fit_to_screen = fit_to_screen
 
         frames = {name: tk.Frame(master=self.root) for name in image_queues}
 
@@ -811,7 +816,8 @@ class TkMultipleViewer(MultipleViewer):
                                            uniform='same size columns')
 
     def _init_window(self):
-        TkSingleViewer._fit_to_screen(self)
+        if self.fit_to_screen:
+            TkSingleViewer._fit_to_screen(self)
         for viewer in self.viewers.values():
             viewer._init_window()
 
@@ -823,11 +829,12 @@ class TkMultipleViewer(MultipleViewer):
         self.update_window()
         self.root.mainloop()
 
-    def update_window(self):
-
+    def _update_window(self):
         for viewer in self.viewers.values():
             viewer._update_window()
 
+    def update_window(self):
+        self._update_window()
         if not self.e_stop.is_set():
             self.root.after(int(1000 * self.dt_graph), self.update_window)
         else:
