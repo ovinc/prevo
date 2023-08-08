@@ -26,9 +26,9 @@ import prevo
 # Local imports
 from .general import RecordingBase, RecordBase
 from ..csv import CsvFile
-from ..viewers import CvRecordMultipleViewer
-from ..viewers import MplRecordMultipleViewer
-from ..viewers import TkRecordMultipleViewer
+from ..viewers import CvMultipleViewer
+from ..viewers import MplMultipleViewer
+from ..viewers import TkMultipleViewer
 
 # Optional, nonstandard
 try:
@@ -261,19 +261,19 @@ class ImageRecord(RecordBase):
     def data_plot(self):
         """What to do when graph event is triggered"""
 
-        Viewers = {'cv': CvRecordMultipleViewer,
-                   'mpl': MplRecordMultipleViewer,
-                   'tk': TkRecordMultipleViewer}
+        Viewers = {'cv': CvMultipleViewer,
+                   'mpl': MplMultipleViewer,
+                   'tk': TkMultipleViewer}
 
         # In case the queue contains other measurements than images
         # (e.g. numerical data from temperature sensors, etc.)
         image_queues = {name: self.q_plot[name]
                         for name in self.image_recordings}
 
-        kwargs = {'recordings': self.image_recordings,
-                  'image_queues': image_queues,
+        kwargs = {'image_queues': image_queues,
                   'e_stop': self.e_stop,
-                  'e_graph': self.e_graph,
-                  'dt_graph': self.dt_graph}
+                  'dt_graph': self.dt_graph,
+                  'show_num': True}
 
         Viewers[self.viewer](**kwargs).start()
+        self.e_graph.clear()
