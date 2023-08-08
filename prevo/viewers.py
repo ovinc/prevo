@@ -227,6 +227,15 @@ class ViewerBase:
         self.e_stop = e_stop if e_stop is not None else Event()
         self.e_close = e_close if e_stop is not None else Event()
 
+    def _init_window(self):
+        pass
+
+    def _init_run(self):
+        pass
+
+    def _run(self):
+        pass
+
     def start(self):
         try:
             self._init_window()
@@ -252,7 +261,6 @@ class SingleViewer(ViewerBase):
                  dt_graph=0.02,
                  dt_fps=2,
                  dt_num=0.2,
-                 update_info_with_every_image=False,
                  ):
         """Init Single Viewer object.
 
@@ -272,11 +280,6 @@ class SingleViewer(ViewerBase):
         - dt_graph: how often (in seconds) the viewer is updated
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
-        - update_info_with_every_image: if True, any info (fps, num etc.) is
-                                        sent for printing at every new
-                                        displayed image (useful if info is
-                                        printed on the image directly instead
-                                        of on a surrounding GUI).
         """
         super().__init__(dt_graph=dt_graph, e_stop=e_stop, e_close=e_close)
 
@@ -286,8 +289,6 @@ class SingleViewer(ViewerBase):
         self.calculate_fps = calculate_fps
         self.show_fps = show_fps
         self.show_num = show_num
-
-        self.update_info_with_every_image = update_info_with_every_image
 
         self._init_info(dt_fps=dt_fps, dt_num=dt_num)
 
@@ -350,40 +351,54 @@ class SingleViewer(ViewerBase):
         if self.show_fps:
             self.display_times_queue.put(t)
 
-    def _display_info(self, info):
+    def _display_info(self):
         """How to display information from info queues on image.
 
         Define in subclasses.
         """
         pass
 
-    def _display_image(self, image):
+    def _display_image(self):
         """How to display image in viewer.
 
         Define in subclasses.
         """
         pass
 
-    def _manage_info(self):
-        """Get information from info queues and display it if not None."""
-        update = self.update_info_with_every_image
+    def _get_info(self):
+        """Get information from info queues and display it if not None.
+
+        Returns None if no new info to print on screen.
+        """
+        update = False
         for name, queue in self.info_queues.items():
             info = get_last_from_queue(queue)
             if info:
-                print(name, info)
                 update = True
                 self.info_values[name] = info
         if update:
             new_info = ' '.join(self.info_values.values())
-            self._display_info(new_info)
+            return new_info
+
+    def _process_info_queue(self):
+        """Typically one wants to call this regularly even if no new image is
+        coming in the queue, because info of fps etc. is stored in queues and
+        can have some delay depending on how quickly the queues are probed."""
+        info = self._get_info()
+        if info is not None:
+            self.info = info
+            self._display_info()
+
+        # Can be useful if one must decide what to do depending on info
+        # (e.g. if info is None, do nothing else)
+        return info
 
     def _process_image_queue(self):
         """How to process measurement from the image queue"""
         data = get_last_from_queue(self.image_queue)
-
         if data is not None:
 
-            image = self._measurement_to_image(data)
+            self.image = self._measurement_to_image(data)
 
             if self.show_num:
                 num = self._measurement_to_num(data)
@@ -392,8 +407,11 @@ class SingleViewer(ViewerBase):
             if self.calculate_fps or self.show_fps:
                 self._store_display_times()
 
-            self._manage_info()
-            self._display_image(image)
+            self._display_image()
+
+        # Can be useful if one must decide what to do depending on data
+        # (e.g. if data is None, do nothing else)
+        return data
 
     def on_stop(self):
         """What to do when live viewer is stopped"""
@@ -442,83 +460,125 @@ class MultipleViewer(ViewerBase):
 class CvSingleViewer(SingleViewer):
     """Display camera images using OpenCV"""
 
+    def __init__(self, image_queue, **kwargs):
+        """Init CvSingleViewer object
+
+        Parameters
+        ----------
+
+        - image_queue: queue in which taken images are put.
+
+        Additional kwargs from SingleViewer:
+        - name: optional name for display purposes.
+        - e_stop: stopping event (threading.Event or equivalent)
+        - e_close: event that is triggered when viewer is closed
+                   (can be the same as e_stop)
+        - calculate_fps: if True, store image times fo calculate fps
+        - show_fps: if True, indicate current display fps on viewer
+        - show_num: if True, indicate current image number on viewer
+                    (note: image data must be a dict with key 'num', or
+                    self._measurement_to_num must be subclassed)
+        - dt_graph: how often (in seconds) the viewer is updated
+        - dt_fps: how often (in seconds) display fps are calculated
+        - dt_num: how often (in seconds) image numbers are updated
+        """
+        super().__init__(image_queue, **kwargs)
+
     def _init_window(self):
         """Create window"""
         cv2.namedWindow(self.name, cv2.WINDOW_NORMAL)
         self.info = '...'
 
-    def _manage_info(self, *args, **kwargs):
-        """Redefined here because info needs to be printed on every image."""
-        if self.info_queue:
-            info = get_last_from_queue(self.info_queue)
-            if info:
-                self.info = info
-            self._display_info(self.info, *args, **kwargs)
-
-    def _update_window(self):
-        """Indicate what happens at each step of the event loop."""
-        data = get_last_from_queue(self.image_queue)
-        if data is not None:
-
-            image = self._measurement_to_image(data)
-            self._manage_info(image=image)
-
-            if image.ndim > 2:
-                # openCV works with BGR data
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            cv2.imshow(self.name, image)
-            self._store_display_times()
-
-    def _display_info(self, info, image=None):
-        cv2.putText(image, info, (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
+    def _display_image(self):
+        # Here we need to have the info display directly in display_image
+        # since the info is written directly on the image itself
+        # This can cause some imprecisions in the image numbers displayed
+        cv2.putText(self.image, self.info, (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
                     1, (255, 255, 255), 2, cv2.LINE_AA)
 
-    def run(self):
+        if self.image.ndim > 2:
+            # openCV works with BGR data
+            self.image = cv2.cvtColor(self.image, cv2.COLOR_RGB2BGR)
+        cv2.imshow(self.name, self.image)
+        self._store_display_times()
+
+    def _run(self):
         """Loop to run live viewer"""
         while (cv2.getWindowProperty(self.name, cv2.WND_PROP_VISIBLE) > 0):
-            self._update_window()
+            self._process_info_queue()
+            self._process_image_queue()
             if self.e_stop.is_set():
                 cv2.destroyWindow(self.name)
                 break
             cv2.waitKey(int(self.dt_graph * 1000))
 
 
-# class CvMultipleViewer(MultipleViewer):
-#     """Display several cameras at the same time using OpenCV"""
+class CvMultipleViewer(MultipleViewer):
+    """Display several cameras at the same time using OpenCV"""
 
-#     def __init__(self,
-#                  image_queues,
-#                  e_stop=None,
-#                  dt_graph=0.01,
-#                  Viewer=CvSingleViewer,
-#                  **kwargs):
-#         """Parameters:
+    def __init__(self,
+                 image_queues,
+                 Viewer=CvSingleViewer,
+                 calculate_fps=False,
+                 show_fps=False,
+                 show_num=False,
+                 **kwargs):
+        """Init TkMultipleViewerObject
 
-#         - image_queues: dict {camera name: queue in which taken images are put.}
-#         - e_stop: stopping event (threading.Event or equivalent)
-#         - dt_graph: how often (in seconds) the GUI window is updated
-#         - Viewer: which Viewer to use (e.g. CvSingleViewer, CvStreamViewer, etc.)
-#         - **kwargs: any optional keyword arguments required by the Viewer.
-#         """
-#         super().__init__(image_queues=image_queues,
-#                          e_stop=e_stop,
-#                          dt_graph=dt_graph,
-#                          Viewer=Viewer,
-#                          **kwargs)
+        Parameters
+        ----------
 
-#     def run(self):
-#         threads = []
+        - image_queues: dict {camera name: queue in which taken images are put.}
+        - Viewer: which single viewer to use for individual image sources.
 
-#         for viewer in self.viewers.values():
-#             threads.append(Thread(target=viewer.start))
+        Arguments to pass to the Viewer
+        - calculate_fps: if True, store image times fo calculate fps
+        - show_fps: if True, indicate current display fps on viewer
+        - show_num: if True, indicate current image number on viewer
+                    (note: image data must be a dict with key 'num', or
+                    self._measurement_to_num must be subclassed)
 
-#         for thread in threads:
-#             thread.start()
+        Additional kwargs from MultipleViewer
+        - e_stop: stopping event (threading.Event or equivalent)
+        - e_close: event that is triggered when viewer is closed
+                   (can be the same as e_stop)
+        - dt_graph: how often (in seconds) the viewer is updated
+        super().__init__(image_queues=image_queues,
+                         e_stop=e_stop,
+                         dt_graph=dt_graph,
+                         Viewer=Viewer,
+                         **kwargs)
+        """
+        viewers = {}
+        for name, image_queue in image_queues.items():
+            viewers[name] = Viewer(
+                image_queue=image_queue,
+                name=name,
+                calculate_fps=calculate_fps,
+                show_fps=show_fps,
+                show_num=show_num,
+            )
+        super().__init__(viewers=viewers, **kwargs)
 
-#         for thread in threads:
-#             thread.join()
+    def run(self):
 
-#         cv2.destroyAllWindows()
+        # No need to start threads if there is only one image queue
+        if len(self.viewers) < 2:
+            self.viewer.run()
+            return
+
+        threads = []
+
+        for viewer in self.viewers.values():
+            threads.append(Thread(target=viewer.start))
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        cv2.destroyAllWindows()
 
 
 # ----------------------------------------------------------------------------
@@ -536,7 +596,7 @@ class MplAnimation:
         """
         pass
 
-    def run(self):
+    def _run(self):
         """Main function to run the animation"""
         ani = FuncAnimation(self.fig,
                             self._update_figure,
@@ -561,13 +621,30 @@ class MplAnimation:
 class MplSingleViewer(MplAnimation, SingleViewer):
     """Display camera images using Matplotlib"""
 
-    def __init__(self, *args, dt_graph=0.04, ax=None, **kwargs):
-        """Parameters:
+    def __init__(self, image_queue, ax=None, **kwargs):
+        """Init MplSingleViewer object.
 
-        - dt_graph: interval (s) to update matplotlib animation
-        - ax (optional): axes into which images are shown
+        Parameters
+        ----------
+
+        - image_queue: queue in which taken images are put.
+        - ax (optional): axes in which to draw the viewer.
+
+        Additional kwargs from SingleViewer:
+        - name: optional name for display purposes.
+        - e_stop: stopping event (threading.Event or equivalent)
+        - e_close: event that is triggered when viewer is closed
+                   (can be the same as e_stop)
+        - calculate_fps: if True, store image times fo calculate fps
+        - show_fps: if True, indicate current display fps on viewer
+        - show_num: if True, indicate current image number on viewer
+                    (note: image data must be a dict with key 'num', or
+                    self._measurement_to_num must be subclassed)
+        - dt_graph: how often (in seconds) the viewer is updated
+        - dt_fps: how often (in seconds) display fps are calculated
+        - dt_num: how often (in seconds) image numbers are updated
         """
-        super().__init__(*args, dt_graph=dt_graph, **kwargs)
+        super().__init__(image_queue, **kwargs)
         self.ax = ax
 
     def _init_window(self):
@@ -608,88 +685,101 @@ class MplSingleViewer(MplAnimation, SingleViewer):
 
     def _update_figure(self, i):
         """Indicate what happens at each step of the matplotlib animation."""
-
         if self.e_stop.is_set():
             plt.close(self.fig)
+        info = self._process_info_queue()
+        data = self._process_image_queue()
+        return () if data is None else (self.im,)
 
-        data = get_last_from_queue(self.image_queue)
+    def _display_info(self):
+        try:
+            self.xlabel.set_text(self.info)
+        # In case the _init_image has not been called yet
+        except AttributeError:
+            pass
 
-        if data is not None:
-
-            image = self._measurement_to_image(data)
-
-            if not self.init_done:
-                self._init_image(image)
-            else:
-                self.im.set_array(image)
-
-            self._store_display_times()
-            self._manage_info()
-
-            return self.im,
+    def _display_image(self):
+        """How to display image in viewer."""
+        if not self.init_done:
+            self._init_image(self.image)
         else:
-            return ()
-
-    def _display_info(self, info):
-        self.xlabel.set_text(info)
+            self.im.set_array(self.image)
 
 
-# class MplMultipleViewer(MplAnimation, MultipleViewer):
-#     """Display several cameras at the same time using Matplotlib"""
+class MplMultipleViewer(MplAnimation, MultipleViewer):
+    """Display several cameras at the same time using Matplotlib"""
 
-#     def __init__(self,
-#                  image_queues,
-#                  e_stop=None,
-#                  dt_graph=0.04,
-#                  Viewer=MplSingleViewer,
-#                  **kwargs):
-#         """Parameters:
+    def __init__(self,
+                 image_queues,
+                 Viewer=MplSingleViewer,
+                 calculate_fps=False,
+                 show_fps=False,
+                 show_num=False,
+                 **kwargs):
+        """Init MplMultipleViewer object
 
-#         - image_queues: dict {camera name: queue in which taken images are put.}
-#         - e_stop: stopping event (threading.Event or equivalent)
-#         - dt_graph: how often (in seconds) the GUI window is updated
-#         - Viewer: which Viewer to use (e.g. MplSingleViewer, MplStreamViewer, etc.)
-#         - **kwargs: any optional keyword arguments required by the Viewer.
-#         """
-#         self._create_axes(image_queues)
+        Parameters
+        ----------
 
-#         super().__init__(image_queues=image_queues,
-#                          e_stop=e_stop,
-#                          dt_graph=dt_graph,
-#                          Viewer=Viewer,
-#                          add_ppties=self.axs,
-#                          add_ppty_name='ax',
-#                          **kwargs)
+        - image_queues: dict {camera name: queue in which taken images are put.}
+        - Viewer: which single viewer to use for individual image sources.
 
-#     def _create_axes(self, image_queues):
-#         """Generate figure/axes as a function of input names"""
+        Arguments to pass to the Viewer
+        - calculate_fps: if True, store image times fo calculate fps
+        - show_fps: if True, indicate current display fps on viewer
+        - show_num: if True, indicate current image number on viewer
+                    (note: image data must be a dict with key 'num', or
+                    self._measurement_to_num must be subclassed)
 
-#         if len(image_queues) == 1:
-#             fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-#             axes = ax,
-#         elif len(image_queues) == 2:
-#             fig, axes = plt.subplots(1, 2, figsize=(15, 8))
-#         else:
-#             raise Exception('Only 2 simultaneous cameras supported for now.')
+        Additional kwargs from MultipleViewer
+        - e_stop: stopping event (threading.Event or equivalent)
+        - e_close: event that is triggered when viewer is closed
+                   (can be the same as e_stop)
+        - dt_graph: how often (in seconds) the viewer is updated
+        """
+        self._create_axes(image_queues)
 
-#         axs = {name: ax for name, ax in zip(image_queues, axes)}
+        viewers = {}
+        for name, image_queue in image_queues.items():
+            viewers[name] = Viewer(
+                image_queue=image_queue,
+                name=name,
+                ax=self.axs[name],
+                calculate_fps=calculate_fps,
+                show_fps=show_fps,
+                show_num=show_num,
+            )
+        super().__init__(viewers=viewers, **kwargs)
 
-#         self.fig, self.axs = fig, axs
+    def _create_axes(self, image_queues):
+        """Generate figure/axes as a function of input names"""
 
-#     def _init_window(self):
-#         for viewer in self.viewers.values():
-#             viewer._init_window()
+        if len(image_queues) == 1:
+            fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+            axes = ax,
+        elif len(image_queues) == 2:
+            fig, axes = plt.subplots(1, 2, figsize=(15, 8))
+        else:
+            raise Exception('Only 2 simultaneous cameras supported for now.')
 
-#     def _init_run(self):
-#         for viewer in self.viewers.values():
-#             viewer._init_run()
+        axs = {name: ax for name, ax in zip(image_queues, axes)}
 
-#     def _update_figure(self, i):
-#         """Indicate what happens at each step of the matplotlib animation."""
-#         to_be_animated = ()
-#         for viewer in self.viewers.values():
-#             to_be_animated += viewer._update_figure(i)
-#         return to_be_animated
+        self.fig, self.axs = fig, axs
+
+    def _init_window(self):
+        for viewer in self.viewers.values():
+            viewer._init_window()
+
+    def _init_run(self):
+        for viewer in self.viewers.values():
+            viewer._init_run()
+
+    def _update_figure(self, i):
+        """Indicate what happens at each step of the matplotlib animation."""
+        to_be_animated = ()
+        for viewer in self.viewers.values():
+            to_be_animated += viewer._update_figure(i)
+        return to_be_animated
 
 
 # ----------------------------------------------------------------------------
@@ -731,9 +821,7 @@ class TkSingleViewer(SingleViewer):
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
         """
-        super().__init__(image_queue,
-                         update_info_with_every_image=False,
-                         **kwargs)
+        super().__init__(image_queue, **kwargs)
 
         self.auto_size = auto_size
         self.fit_to_screen = fit_to_screen
@@ -777,11 +865,14 @@ class TkSingleViewer(SingleViewer):
         self.update_window()
         self.root.mainloop()
 
-    def _display_image(self, image):
+    def _display_info(self):
+        self.info_label.config(text=self.info)
+
+    def _display_image(self):
         """How to display image in viewer."""
         self.image_count += 1
 
-        img = Image.fromarray(image)
+        img = Image.fromarray(self.image)
         img_disp = self.prepare_displayed_image(img)
 
         self.img = ImageTk.PhotoImage(image=img_disp)
@@ -789,6 +880,7 @@ class TkSingleViewer(SingleViewer):
 
     def update_window(self):
         """Update window, with the after() method."""
+        self._process_info_queue()
         self._process_image_queue()
         if not self.e_stop.is_set():
             self.root.after(int(1000 * self.dt_graph), self.update_window)
@@ -834,15 +926,13 @@ class TkSingleViewer(SingleViewer):
 
         return width, height
 
-    def _display_info(self, info):
-        self.info_label.config(text=info)
-
 
 class TkMultipleViewer(MultipleViewer):
     """Live view of images from multiple cameras using tkinter"""
 
     def __init__(self,
                  image_queues,
+                 Viewer=TkSingleViewer,
                  fit_to_screen=True,
                  root=None,
                  auto_size=True,
@@ -856,10 +946,11 @@ class TkMultipleViewer(MultipleViewer):
         ----------
 
         - image_queues: dict {camera name: queue in which taken images are put.}
+        - Viewer: which single viewer to use for individual image sources.
         - fit_to_screen: maximize window size when instantiated
         - root: Tkinter parent in which to display viewer (if not, tk.Tk())
 
-        Arguments to pass to TkSingleViewers
+        Arguments to pass to the Viewer
         - auto_size: autoscale image to window in real time
         - calculate_fps: if True, store image times fo calculate fps
         - show_fps: if True, indicate current display fps on viewer
@@ -879,7 +970,7 @@ class TkMultipleViewer(MultipleViewer):
 
         viewers = {}
         for name, image_queue in image_queues.items():
-            viewers[name] = TkSingleViewer(
+            viewers[name] = Viewer(
                 image_queue=image_queue,
                 name=name,
                 root=tk.Frame(master=self.root),
@@ -932,6 +1023,7 @@ class TkMultipleViewer(MultipleViewer):
 
     def _process_image_queues(self):
         for viewer in self.viewers.values():
+            viewer._process_info_queue()
             viewer._process_image_queue()
 
     def update_window(self):
@@ -940,113 +1032,3 @@ class TkMultipleViewer(MultipleViewer):
             self.root.after(int(1000 * self.dt_graph), self.update_window)
         else:
             self.root.destroy()
-
-
-# # ============ For live streaming with real-time fps calculation =============
-
-
-# class CvStreamViewer(SingleStreamViewer, CvSingleViewer):
-#     pass
-
-
-# class MplStreamViewer(SingleStreamViewer, MplSingleViewer):
-#     pass
-
-
-# class TkStreamViewer(SingleStreamViewer, TkSingleViewer):
-#     pass
-
-
-# # ================ Integration into prevo.Record environments ================
-
-
-# class RecordInfoSender(InfoSender):
-#     """Class to send information to display in Image Viewer.
-
-#     For example: fps, image number, etc.
-#     """
-#     def __init__(self, recording, info_queue, e_stop, dt_check=0.2):
-#         """Parameters:
-
-#         - recording: object of subclass of prevo.RecordingBase
-#         - info_queue: queue into which information is put
-#         - e_stop: stopping event (threading.Event or equivalent)
-#         - dt_check: how often (in seconds) information is sent
-#         """
-#         self.recording = recording
-#         super().__init__(info_queue=info_queue,
-#                          e_stop=e_stop,
-#                          dt_check=dt_check)
-
-#     def _generate_info(self):
-#         """To be defined in subclass.
-
-#         Should return a str of info to print in the viewer.
-#         Should return a false-like value if no news info can be provided."""
-#         return f'# {self.recording.num}'
-
-
-# class RecordSingleViewer:
-#     """Additional methods to SingleViewer and subclasses.
-
-#     For use in prevo.RecordBase environments."""
-
-#     def __init__(self, recordings, dt_check=0.2, **kwargs):
-
-#         super().__init__(info_queue=Queue(), **kwargs)
-
-#         self.recording = recordings[self.name]  # self.name defined in super()
-#         self.dt_check = dt_check
-
-#     def _init_run(self):
-#         super()._init_run()
-#         if self.info_queue:
-#             info_sender = RecordInfoSender(recording=self.recording,
-#                                            info_queue=self.info_queue,
-#                                            e_stop=self.e_stop,
-#                                            dt_check=self.dt_check)
-#             info_sender.start()
-
-#     def on_stop(self):
-#         """Here one does not want to stop recording when window is closed."""
-#         pass
-
-
-# class CvRecordSingleViewer(RecordSingleViewer, CvSingleViewer):
-#     pass
-
-
-# class MplRecordSingleViewer(RecordSingleViewer, MplSingleViewer):
-#     pass
-
-
-# class TkRecordSingleViewer(RecordSingleViewer, TkSingleViewer):
-#     pass
-
-
-# class RecordMultipleViewer:
-#     """Additional methods to MultipleViewers-type classes.
-
-#     For use in prevo.RecordBase environments."""
-
-#     def __init__(self, e_graph, **kwargs):
-#         super().__init__(Viewer=self.SingleViewer, **kwargs)
-#         self.e_graph = e_graph
-
-#     def on_stop(self):
-#         self.e_graph.clear()
-
-
-# class CvRecordMultipleViewer(RecordMultipleViewer, CvMultipleViewer):
-#     SingleViewer = CvRecordSingleViewer
-#     pass
-
-
-# class MplRecordMultipleViewer(RecordMultipleViewer, MplMultipleViewer):
-#     SingleViewer = MplRecordSingleViewer
-#     pass
-
-
-# class TkRecordMultipleViewer(RecordMultipleViewer, TkMultipleViewer):
-#     SingleViewer = TkRecordSingleViewer
-#     pass
