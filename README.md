@@ -67,7 +67,7 @@ A minimal example is provided below, to record pressure and temperature asynchro
         name = 'P'
 
         def _get_data(self):
-            return Gauge.read(averaging=self.avg)
+            return Gauge.read()
     ```
 
 1) **Define the individual recordings**

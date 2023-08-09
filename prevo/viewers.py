@@ -225,7 +225,7 @@ class ViewerBase:
         """
         self.dt_graph = dt_graph
         self.e_stop = e_stop if e_stop is not None else Event()
-        self.e_close = e_close if e_stop is not None else Event()
+        self.e_close = e_close if e_close is not None else Event()
 
     def _init_window(self):
         pass
@@ -290,7 +290,13 @@ class SingleViewer(ViewerBase):
         self.show_fps = show_fps
         self.show_num = show_num
 
-        self._init_info(dt_fps=dt_fps, dt_num=dt_num)
+        try:
+            self._init_info(dt_fps=dt_fps, dt_num=dt_num)
+        except Exception:
+            print('--- !!! Error in Viewer Init !!! ---')
+            print_exc()
+            self.on_stop()
+
 
     def _init_info(self, **kwargs):
         """Init info objects that manage printing of fps, img number etc."""
@@ -305,7 +311,8 @@ class SingleViewer(ViewerBase):
         if self.show_fps:
             self.display_times_queue = Queue()  # to calculate fps on partial data
             fps_calculator = LiveFpsCalculator(time_queue=self.display_times_queue,
-                                               e_stop=self.e_stop,
+                                               # To stop thread when viewer is closed
+                                               e_stop=self.e_close,
                                                dt_check=kwargs.get('dt_fps'))
             self.info_queues['fps'] = fps_calculator.queue
             self.info_values['fps'] = ''
@@ -314,7 +321,7 @@ class SingleViewer(ViewerBase):
         if self.show_num:
             self.image_number_queue = Queue()
             image_number = LiveImageNumber(num_queue=self.image_number_queue,
-                                           e_stop=self.e_stop,
+                                           e_stop=self.e_close,
                                            dt_check=kwargs.get('dt_num'))
             self.info_queues['num'] = image_number.queue
             self.info_values['num'] = ''
@@ -448,6 +455,7 @@ class MultipleViewer(ViewerBase):
         self.viewers = viewers
 
     def on_stop(self):
+        self.e_close.set()
         for viewer in self.viewers.values():
             viewer.on_stop()
 
@@ -560,11 +568,12 @@ class CvMultipleViewer(MultipleViewer):
             )
         super().__init__(viewers=viewers, **kwargs)
 
-    def run(self):
+    def _run(self):
 
         # No need to start threads if there is only one image queue
         if len(self.viewers) < 2:
-            self.viewer.run()
+            viewer, = self.viewers.values()
+            viewer.start()
             return
 
         threads = []
@@ -598,30 +607,32 @@ class MplAnimation:
 
     def _run(self):
         """Main function to run the animation"""
-        ani = FuncAnimation(self.fig,
-                            self._update_figure,
-                            interval=int(self.dt_graph) * 1000,
-                            blit=True,
-                            cache_frame_data=False)
+        self.ani = FuncAnimation(self.fig,
+                                 self._update_figure,
+                                 interval=int(self.dt_graph) * 1000,
+                                 blit=self.blit,
+                                 cache_frame_data=False)
         plt.show(block=True)
         plt.close(self.fig)
-        return ani
+        return self.ani
 
     def on_fig_close(self, event):
-        """Anything to triggeer when figure is closed.
+        """Anything to trigger when figure is closed.
 
         A callback to on_fig_close must be declared in the subclass for this
         to be called.
         """
-
-        # To be able to trigger on_stop() in a multiple image environment
         self.on_stop()
 
 
 class MplSingleViewer(MplAnimation, SingleViewer):
     """Display camera images using Matplotlib"""
 
-    def __init__(self, image_queue, ax=None, **kwargs):
+    def __init__(self,
+                 image_queue,
+                 ax=None,
+                 blit=True,
+                 **kwargs):
         """Init MplSingleViewer object.
 
         Parameters
@@ -629,6 +640,8 @@ class MplSingleViewer(MplAnimation, SingleViewer):
 
         - image_queue: queue in which taken images are put.
         - ax (optional): axes in which to draw the viewer.
+        _ blit: if True, use blitting for faster rendering (can cause issues
+                for updating info such as fps, image number)
 
         Additional kwargs from SingleViewer:
         - name: optional name for display purposes.
@@ -646,6 +659,7 @@ class MplSingleViewer(MplAnimation, SingleViewer):
         """
         super().__init__(image_queue, **kwargs)
         self.ax = ax
+        self.blit = blit
 
     def _init_window(self):
 
@@ -654,12 +668,12 @@ class MplSingleViewer(MplAnimation, SingleViewer):
         else:
             self.fig = self.ax.figure
 
-            # To be able to trigger on_stop() in a multiple image environment
-            self.fig.canvas.mpl_connect('close_event', self.on_fig_close)
-
         self._format_figure()
-
         self.init_done = False
+
+    def _init_run(self):
+        """Not in _init_window to avoid calling this when in a multiple viewer"""
+        self.fig.canvas.mpl_connect('close_event', self.on_fig_close)
 
     def _format_figure(self):
         """"Set colors, title etc."""
@@ -712,6 +726,7 @@ class MplMultipleViewer(MplAnimation, MultipleViewer):
     def __init__(self,
                  image_queues,
                  Viewer=MplSingleViewer,
+                 blit=True,
                  calculate_fps=False,
                  show_fps=False,
                  show_num=False,
@@ -723,6 +738,8 @@ class MplMultipleViewer(MplAnimation, MultipleViewer):
 
         - image_queues: dict {camera name: queue in which taken images are put.}
         - Viewer: which single viewer to use for individual image sources.
+        _ blit: if True, use blitting for faster rendering (can cause issues
+                for updating info such as fps, image number)
 
         Arguments to pass to the Viewer
         - calculate_fps: if True, store image times fo calculate fps
@@ -737,6 +754,7 @@ class MplMultipleViewer(MplAnimation, MultipleViewer):
                    (can be the same as e_stop)
         - dt_graph: how often (in seconds) the viewer is updated
         """
+        self.blit = blit
         self._create_axes(image_queues)
 
         viewers = {}
@@ -771,8 +789,7 @@ class MplMultipleViewer(MplAnimation, MultipleViewer):
             viewer._init_window()
 
     def _init_run(self):
-        for viewer in self.viewers.values():
-            viewer._init_run()
+        self.fig.canvas.mpl_connect('close_event', self.on_fig_close)
 
     def _update_figure(self, i):
         """Indicate what happens at each step of the matplotlib animation."""
