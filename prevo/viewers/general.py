@@ -314,10 +314,6 @@ class WindowBase:
         """How to create/init window."""
         pass
 
-    def _init_run(self):
-        """Anything to be done just before starting the viewer."""
-        pass
-
     def _display_info(self):
         """How to display information from info queues on image.
 
@@ -416,25 +412,25 @@ class ViewerBase:
         self.internal_stop = internal_stop if internal_stop is not None else Event()
 
     def _init_viewer(self):
-        for window in self.windows:
-            window._init_window()
-
-    def _init_run(self):
-        for window in self.windows:
-            window._init_run()
+        """Define in subclasses"""
 
     def _run(self):
+        """Define in subclasses"""
         pass
 
     def start(self):
         try:
             self._init_viewer()
-            self._init_run()
+            self._init_windows()
             self._run()
         except Exception:
             print('--- !!! Error in Viewer !!! ---')
             print_exc()
         self._on_stop()
+
+    def _init_windows(self):
+        for window in self.windows:
+            window._init_window()
 
     def _update_info(self):
         for window in self.windows:

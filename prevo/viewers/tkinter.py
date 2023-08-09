@@ -97,8 +97,6 @@ class TkWindow(WindowBase):
                                        text=str('...'))
             self.info_label.pack(expand=True)
 
-    def _init_run(self):
-        """If things need to be done before running (subclass if necessary)"""
         self.image_count = 0
 
     def _display_info(self):
@@ -113,11 +111,6 @@ class TkWindow(WindowBase):
 
         self.img = ImageTk.PhotoImage(image=img_disp)
         self.image_label.configure(image=self.img)
-
-    def _update_window(self):
-        """Update window, with the after() method."""
-        self._process_info_queue()
-        self._process_image_queue()
 
     def _prepare_displayed_image(self, img):
         """Resize image and/or calculate aspect ratio if necessary"""
@@ -218,8 +211,6 @@ class TkViewer(ViewerBase):
         if self.fit_to_screen:
             self._fit_to_screen()
 
-        super()._init_viewer()
-
     def _fit_to_screen(self):
         """Adapt window size to screen resolution/size"""
         w_screen = self.root.winfo_screenwidth()
@@ -236,14 +227,10 @@ class TkViewer(ViewerBase):
         if self.external_stop.is_set():
             self._on_close()
             return
-        if self.internal_stop.is_set():
-            return
         self.loop = self.root.after(int(1000 * self.dt_graph), self._update)
 
     def _on_close(self):
         """Callback to user manually closing window"""
-        self.internal_stop.set()
-
         try:
             loop = self.loop
         except AttributeError:  # in case after() has not been called yet
