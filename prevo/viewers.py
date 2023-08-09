@@ -422,9 +422,6 @@ class SingleViewer(ViewerBase):
 
     def on_stop(self):
         """What to do when live viewer is stopped"""
-        # This is e.g. to stop camera readings in live() when window is closed.
-        # In record() situations, this needs to be subclassed to avoid stopping
-        # the recording when closing the window.
         self.e_close.set()
 
         if self.calculate_fps:
@@ -551,11 +548,6 @@ class CvMultipleViewer(MultipleViewer):
         - e_close: event that is triggered when viewer is closed
                    (can be the same as e_stop)
         - dt_graph: how often (in seconds) the viewer is updated
-        super().__init__(image_queues=image_queues,
-                         e_stop=e_stop,
-                         dt_graph=dt_graph,
-                         Viewer=Viewer,
-                         **kwargs)
         """
         viewers = {}
         for name, image_queue in image_queues.items():
@@ -845,6 +837,14 @@ class TkSingleViewer(SingleViewer):
         self.root = tk.Tk() if root is None else root
         self.root.configure(bg=bgcolor)
 
+        # Detect manual closing of window
+        self.main_root = self.root.winfo_toplevel()
+        self.main_root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def on_close(self):
+        self.on_stop()
+        self.main_root.destroy()
+
     def _fit_to_screen(self):
         """Adapt window size to screen resolution/size"""
         w_screen = self.root.winfo_screenwidth()
@@ -899,10 +899,12 @@ class TkSingleViewer(SingleViewer):
         """Update window, with the after() method."""
         self._process_info_queue()
         self._process_image_queue()
-        if not self.e_stop.is_set():
-            self.root.after(int(1000 * self.dt_graph), self.update_window)
-        else:
-            self.root.destroy()
+        if self.e_stop.is_set():
+            self.main_root.destroy()
+            return
+        if self.e_close.is_set():
+            return
+        self.root.after(int(1000 * self.dt_graph), self.update_window)
 
     def prepare_displayed_image(self, img):
         """Resize image and/or calculate aspect ratio if necessary"""
@@ -982,8 +984,12 @@ class TkMultipleViewer(MultipleViewer):
         - dt_graph: how often (in seconds) the viewer is updated
         """
         self.root = tk.Tk() if root is None else root
-        self.root.configure(bg=bgcolor)
         self.fit_to_screen = fit_to_screen
+        self.root.configure(bg=bgcolor)
+
+        # Detect manual closing of window
+        self.main_root = self.root.winfo_toplevel()
+        self.main_root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         viewers = {}
         for name, image_queue in image_queues.items():
@@ -1024,6 +1030,10 @@ class TkMultipleViewer(MultipleViewer):
             self.root.grid_columnconfigure(j, weight=1,
                                            uniform='same size columns')
 
+    def on_close(self):
+        self.on_stop()
+        self.main_root.destroy()
+
     def _init_window(self):
         if self.fit_to_screen:
             TkSingleViewer._fit_to_screen(self)
@@ -1038,14 +1048,20 @@ class TkMultipleViewer(MultipleViewer):
         self.update_window()
         self.root.mainloop()
 
-    def _process_image_queues(self):
+    def _process_info_queues(self):
         for viewer in self.viewers.values():
             viewer._process_info_queue()
+
+    def _process_image_queues(self):
+        for viewer in self.viewers.values():
             viewer._process_image_queue()
 
     def update_window(self):
+        self._process_info_queues()
         self._process_image_queues()
-        if not self.e_stop.is_set():
-            self.root.after(int(1000 * self.dt_graph), self.update_window)
-        else:
+        if self.e_stop.is_set():
             self.root.destroy()
+            return
+        if self.e_close.is_set():
+            return
+        self.root.after(int(1000 * self.dt_graph), self.update_window)
