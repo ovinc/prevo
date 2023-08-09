@@ -21,3 +21,4 @@
 
 from .general import WindowBase, ViewerBase
 from .tkinter import TkWindow, TkViewer
+from .opencv import CvWindow, CvViewer

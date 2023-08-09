@@ -60,6 +60,8 @@ class TkWindow(WindowBase):
                     a different DataFormatter must be provided)
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
+        - DataFormatter: class that transforms elements from the queue
+                         into image arrays and image numbers.
         """
         super().__init__(image_queue, **kwargs)
         self.auto_size = auto_size
@@ -164,7 +166,7 @@ class TkViewer(ViewerBase):
                  windows,
                  fit_to_screen=True,
                  **kwargs):
-        """Init TkMultipleViewerObject
+        """Init TkViewer object
 
         Parameters
         ----------
@@ -173,10 +175,11 @@ class TkViewer(ViewerBase):
         - fit_to_screen: maximize window size when instantiated
         - root: Tkinter parent in which to display viewer (if not, tk.Tk())
 
-        Additional kwargs from MultipleViewer
-        - e_stop: stopping event (threading.Event or equivalent)
-        - e_close: event that is triggered when viewer is closed
-                   (can be the same as e_stop)
+        Additional kwargs from ViewerBase
+        - external_stop: stopping event (threading.Event or equivalent)
+                         signaling stopping requested from outside of the class
+                         (won't be set or cleared, just monitored)
+        - internal_stop: stopping event that will be set() when viewer stops.
         - dt_graph: how often (in seconds) the viewer is updated
         """
         self.fit_to_screen = fit_to_screen

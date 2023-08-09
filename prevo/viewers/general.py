@@ -237,7 +237,7 @@ class WindowBase:
                  dt_num=0.2,
                  DataFormatter=MeasurementFormatter,
                  ):
-        """Init Single Viewer object.
+        """Init Window object.
 
         Parameters
         ----------
@@ -251,6 +251,8 @@ class WindowBase:
                     a different DataFormatter must be provided)
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
+        - DataFormatter: class that transforms elements from the queue
+                         into image arrays and image numbers.
         """
         self.image_queue = image_queue
         self.name = name
