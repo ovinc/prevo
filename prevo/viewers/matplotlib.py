@@ -210,57 +210,41 @@ class LiveImageNumber(InfoSender):
 # =============================== Base classes ===============================
 
 
-class ViewerBase:
-    """Only useful to provide general start() function"""
+class MeasurementFormatter:
+    """How to transform elements from the queue into image arrays and img number.
 
-    def __init__(self, e_stop=None, e_close=None, dt_graph=0.02):
-        """Init ViewerBase object
+    Can be subclassed.
+    """
 
-        Parameters
-        ----------
-        - e_stop: stopping event (threading.Event or equivalent)
-        - e_close: event that is triggered when viewer is closed
-                   (can be the same as e_stop)
-        - dt_graph: how often (in seconds) the viewer is updated
+    def get_image(self, measurement):
+        """How to transform individual elements from the queue into an image.
+
+        (returns an array-like object).
+        Can be subclassed to accommodate different queue formats.
         """
-        self.dt_graph = dt_graph
-        self.e_stop = e_stop if e_stop is not None else Event()
-        self.e_close = e_close if e_close is not None else Event()
+        return measurement['image']
 
-    def _init_window(self):
-        pass
+    def get_num(self, measurement):
+        """How to get image numbers from individual elements from the queue.
 
-    def _init_run(self):
-        pass
-
-    def _run(self):
-        pass
-
-    def start(self):
-        try:
-            self._init_window()
-            self._init_run()
-            self._run()
-        except Exception:
-            print('--- !!! Error in Viewer !!! ---')
-            print_exc()
-        self.on_stop()
+        (returns an int).
+        Can be subclassed to accommodate different queue formats.
+        """
+        return measurement['num']
 
 
-class SingleViewer(ViewerBase):
-    """Base class for GUIs for viewing images from image queues."""
+class WindowBase:
+    """Base class for windows managing single image queues."""
 
     def __init__(self,
                  image_queue,
-                 name='Camera',
-                 e_stop=None,
-                 e_close=None,
+                 name=None,
                  calculate_fps=False,
                  show_fps=False,
                  show_num=False,
-                 dt_graph=0.02,
                  dt_fps=2,
                  dt_num=0.2,
+                 DataFormatter=MeasurementFormatter,
                  ):
         """Init Single Viewer object.
 
@@ -269,20 +253,14 @@ class SingleViewer(ViewerBase):
 
         - image_queue: queue in which taken images are put.
         - name: optional name for display purposes.
-        - e_stop: stopping event (threading.Event or equivalent)
-        - e_close: event that is triggered when viewer is closed
-                   (can be the same as e_stop)
         - calculate_fps: if True, store image times fo calculate fps
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    self._measurement_to_num must be subclassed)
-        - dt_graph: how often (in seconds) the viewer is updated
+                    a different DataFormatter must be provided)
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
         """
-        super().__init__(dt_graph=dt_graph, e_stop=e_stop, e_close=e_close)
-
         self.image_queue = image_queue
         self.name = name
 
@@ -290,13 +268,18 @@ class SingleViewer(ViewerBase):
         self.show_fps = show_fps
         self.show_num = show_num
 
+        self.measurement_formatter = DataFormatter()
+        self.stop_event = Event()
+
         try:
             self._init_info(dt_fps=dt_fps, dt_num=dt_num)
         except Exception:
-            print('--- !!! Error in Viewer Init !!! ---')
+            print(f'--- !!! Error in  {self.name} Viewer Init !!! ---')
             print_exc()
             self.on_stop()
 
+    def __repr__(self):
+        return f'{self.__class__.__name__} ({self.name})'
 
     def _init_info(self, **kwargs):
         """Init info objects that manage printing of fps, img number etc."""
@@ -312,7 +295,7 @@ class SingleViewer(ViewerBase):
             self.display_times_queue = Queue()  # to calculate fps on partial data
             fps_calculator = LiveFpsCalculator(time_queue=self.display_times_queue,
                                                # To stop thread when viewer is closed
-                                               e_stop=self.e_close,
+                                               e_stop=self.stop_event,
                                                dt_check=kwargs.get('dt_fps'))
             self.info_queues['fps'] = fps_calculator.queue
             self.info_values['fps'] = ''
@@ -321,11 +304,18 @@ class SingleViewer(ViewerBase):
         if self.show_num:
             self.image_number_queue = Queue()
             image_number = LiveImageNumber(num_queue=self.image_number_queue,
-                                           e_stop=self.e_close,
+                                           e_stop=self.stop_event,
                                            dt_check=kwargs.get('dt_num'))
             self.info_queues['num'] = image_number.queue
             self.info_values['num'] = ''
             image_number.start()
+
+    def _store_display_times(self):
+        t = time.perf_counter()
+        if self.calculate_fps:
+            self.display_times.append(t)
+        if self.show_fps:
+            self.display_times_queue.put(t)
 
     def _init_window(self):
         """How to create/init window."""
@@ -334,29 +324,6 @@ class SingleViewer(ViewerBase):
     def _init_run(self):
         """Anything to be done just before starting the viewer."""
         pass
-
-    def _measurement_to_image(self, measurement):
-        """How to transform individual elements from the queue into an image.
-
-        (returns an array-like object).
-        Can be subclassed to accommodate different queue formats.
-        """
-        return measurement['image']
-
-    def _measurement_to_num(self, measurement):
-        """How to get image numbers from individual elements from the queue.
-
-        (returns an int).
-        Can be subclassed to accommodate different queue formats.
-        """
-        return measurement['num']
-
-    def _store_display_times(self):
-        t = time.perf_counter()
-        if self.calculate_fps:
-            self.display_times.append(t)
-        if self.show_fps:
-            self.display_times_queue.put(t)
 
     def _display_info(self):
         """How to display information from info queues on image.
@@ -405,10 +372,10 @@ class SingleViewer(ViewerBase):
         data = get_last_from_queue(self.image_queue)
         if data is not None:
 
-            self.image = self._measurement_to_image(data)
+            self.image = self.measurement_formatter.get_image(data)
 
             if self.show_num:
-                num = self._measurement_to_num(data)
+                num = self.self.measurement_formatter.get_num(data)
                 self.image_number_queue.put(num)
 
             if self.calculate_fps or self.show_fps:
@@ -422,39 +389,56 @@ class SingleViewer(ViewerBase):
 
     def on_stop(self):
         """What to do when live viewer is stopped"""
-        self.e_close.set()
-
+        self.stop_event.set()
         if self.calculate_fps:
             if len(self.display_times) > 1:
                 fps = 1 / np.diff(self.display_times).mean()
-                print(f'Average display frame rate [{self.name}]: {fps:.3f} fps')
+                print(f'Average display frame rate [{self.name}]: {fps:.3f} fps. ')
             else:
-                print('Impossible to calculate average FPS (not enough values)')
+                print('Impossible to calculate average FPS (not enough values). ')
 
 
+class ViewerBase:
+    """Base class for Viewers (contain windows)"""
 
-class MultipleViewer(ViewerBase):
-
-    def __init__(self,
-                 viewers,
-                 **kwargs
-                 ):
-        """Init MultipleViewer object
+    def __init__(self, e_stop=None, e_close=None, dt_graph=0.02):
+        """Init ViewerBase object
 
         Parameters
         ----------
-        - viewers: dict {name: single viewer object}
-
-        Additional kwargs from ViewerBase:
-
+        - e_stop: stopping event (threading.Event or equivalent)
+        - e_close: event that is triggered when viewer is closed
+                   (can be the same as e_stop)
+        - dt_graph: how often (in seconds) the viewer is updated
         """
-        super().__init__(**kwargs)
-        self.viewers = viewers
+        self.dt_graph = dt_graph
+        self.e_stop = e_stop if e_stop is not None else Event()
+        self.e_close = e_close if e_close is not None else Event()
+
+    def _init_window(self):
+        pass
+
+    def _init_run(self):
+        pass
+
+    def _run(self):
+        pass
+
+    def start(self):
+        try:
+            self._init_window()
+            self._init_run()
+            self._run()
+        except Exception:
+            print('--- !!! Error in Viewer !!! ---')
+            print_exc()
+        self.on_stop()
 
     def on_stop(self):
         self.e_close.set()
         for viewer in self.viewers.values():
             viewer.on_stop()
+
 
 
 # ----------------------------------------------------------------------------
@@ -482,7 +466,7 @@ class CvSingleViewer(SingleViewer):
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    self._measurement_to_num must be subclassed)
+                    a different DataFormatter must be provided)
         - dt_graph: how often (in seconds) the viewer is updated
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
@@ -541,7 +525,7 @@ class CvMultipleViewer(MultipleViewer):
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    self._measurement_to_num must be subclassed)
+                    a different DataFormatter must be provided)
 
         Additional kwargs from MultipleViewer
         - e_stop: stopping event (threading.Event or equivalent)
@@ -644,7 +628,7 @@ class MplSingleViewer(MplAnimation, SingleViewer):
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    self._measurement_to_num must be subclassed)
+                    a different DataFormatter must be provided)
         - dt_graph: how often (in seconds) the viewer is updated
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
@@ -738,7 +722,7 @@ class MplMultipleViewer(MplAnimation, MultipleViewer):
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    self._measurement_to_num must be subclassed)
+                    a different DataFormatter must be provided)
 
         Additional kwargs from MultipleViewer
         - e_stop: stopping event (threading.Event or equivalent)
@@ -796,7 +780,7 @@ class MplMultipleViewer(MplAnimation, MultipleViewer):
 # ----------------------------------------------------------------------------
 
 
-class TkSingleViewer(SingleViewer):
+class TkWindow(SingleViewer):
     """Live view of camera images using tkinter"""
 
     def __init__(self,
@@ -825,7 +809,7 @@ class TkSingleViewer(SingleViewer):
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    self._measurement_to_num must be subclassed)
+                    a different DataFormatter must be provided)
         - dt_graph: how often (in seconds) the viewer is updated
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
@@ -975,7 +959,7 @@ class TkMultipleViewer(MultipleViewer):
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    self._measurement_to_num must be subclassed)
+                    a different DataFormatter must be provided)
 
         Additional kwargs from MultipleViewer
         - e_stop: stopping event (threading.Event or equivalent)
