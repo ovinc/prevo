@@ -166,21 +166,23 @@ class TkViewer(ViewerBase):
         - external_stop: stopping event (threading.Event or equivalent)
                          signaling stopping requested from outside of the class
                          (won't be set or cleared, just monitored)
-        - internal_stop: stopping event that will be set() when viewer stops.
         - dt_graph: how often (in seconds) the viewer is updated
         """
         self.fit_to_screen = fit_to_screen
         super().__init__(windows=windows, **kwargs)
 
-    def _init_viewer(self):
-
+    def _create_root(self):
         self.root = tk.Tk()
         self.root.configure(bg=CONFIG['bgcolor'])
         # Detect manual closing of window
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    def _create_grid(self, parent=None):
+        """This allows to create the elements in other parents for child classes."""
+        parent = self.root if parent is None else parent
+
         for window in self.windows:
-            window.parent = tk.Frame(master=self.root)
+            window.parent = tk.Frame(master=parent)
 
         n = len(self.windows)
         n1, n2 = DISPOSITIONS[n]  # dimensions of grid to place elements
@@ -194,14 +196,13 @@ class TkViewer(ViewerBase):
         # Note: the str in uniform= is just an identifier
         # all columns / rows sharing the same string are kept of same size
         for i in range(n1):
-            self.root.grid_rowconfigure(i,
-                                        weight=1,
-                                        uniform='same size rows')
+            parent.grid_rowconfigure(i, weight=1, uniform='same rows')
         for j in range(n2):
-            self.root.grid_columnconfigure(j,
-                                           weight=1,
-                                           uniform='same size columns')
+            parent.grid_columnconfigure(j, weight=1, uniform='same columns')
 
+    def _init_viewer(self):
+        self._create_root()
+        self._create_grid(parent=self.root)
         if self.fit_to_screen:
             self._fit_to_screen()
 
@@ -219,6 +220,8 @@ class TkViewer(ViewerBase):
         self._update_info()
         self._update_images()
         if self.external_stop.is_set():
+            # NOTE: the internal stop setting is managed by self._on_stop,
+            # which is automatically called by self.start() in the end
             self._on_close()
             return
         self.loop = self.root.after(int(1000 * self.dt_graph), self._update)

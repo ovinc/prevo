@@ -440,14 +440,14 @@ class RecordBase:
 
     def create_events(self):
         """Create event objects managed by the CLI"""
-        self.e_stop = Event()  # event set to stop recording when needed.
-        self.e_graph = Event()  # event set to start plotting the data in real time
+        self.internal_stop = Event()  # event set to stop recording when needed.
+        self.graph_request = Event()  # event set to start plotting the data in real time
 
-        graph_event = ControlledEvent(event=self.e_graph,
+        graph_event = ControlledEvent(event=self.graph_request,
                                       readable='graph',
                                       commands=('g', 'graph'))
 
-        stop_event = ControlledEvent(event=self.e_stop,
+        stop_event = ControlledEvent(event=self.internal_stop,
                                      readable='stop',
                                      commands=('q', 'Q', 'quit'))
 
@@ -567,7 +567,7 @@ class RecordBase:
 
         finally:
 
-            self.e_stop.set()
+            self.internal_stop.set()
 
             for thread in self.threads:
                 thread.join()
@@ -594,7 +594,7 @@ class RecordBase:
             command_input = CommandLineInterface(self.recordings, self.events)
             command_input.run()
         else:
-            self.e_stop.set()
+            self.internal_stop.set()
             raise ValueError('No recordings provided. Stopping ...')
 
     @try_thread
@@ -629,7 +629,7 @@ class RecordBase:
             # Without this here, the first data points are irregularly spaced.
             recording.timer.reset()
 
-            while not self.e_stop.is_set():
+            while not self.internal_stop.is_set():
 
                 if not recording.active:
                     if not recording.continuous:
@@ -659,7 +659,7 @@ class RecordBase:
                     saving_queue.put(measurement)
 
                     # Store recorded data in another queue for plotting
-                    if self.e_graph.is_set():
+                    if self.graph_request.is_set():
                         plotting_queue.put(measurement)
 
                 # Below, this means that one does not try to acquire data right
@@ -704,7 +704,7 @@ class RecordBase:
 
         recording.file_manager.init_file()
 
-        while not self.e_stop.is_set():
+        while not self.internal_stop.is_set():
 
             # Open and close file at each cycle to be able to save periodically
             # and for other users/programs to access the data simultaneously
@@ -720,7 +720,7 @@ class RecordBase:
                         if measurement is not None:
                             self._try_save(measurement, recording, file)
 
-                    if self.e_stop.is_set():  # Move to buffering waitbar
+                    if self.internal_stop.is_set():  # Move to buffering waitbar
                         break
 
                 # periodic check whether there is data to save
@@ -756,17 +756,13 @@ class RecordBase:
     def data_graph(self):
         """Manage requests of real-time plotting of data during recording."""
 
-        while not self.e_stop.is_set():
+        while not self.internal_stop.is_set():
 
-            if self.e_graph.is_set():
-                # no need to reset e_graph here, because data_plot is blocking in
-                # this version of the code (because of the plt.show() and
-                # FuncAnimation). If data_plot is changed, it might be useful to
-                # put back a e_graph.clear() here.
-
+            if self.graph_request.is_set():
                 self.data_plot()
+                self.graph_request.clear()
 
-            self.e_stop.wait(self.dt_request)  # check whether there is a graph request
+            self.internal_stop.wait(self.dt_request)  # check whether there is a graph request
 
     # ========================== Check queue sizes ===========================
 
@@ -799,7 +795,7 @@ class RecordBase:
         self.q_save_size_over = self._init_queue_size_info()
         self.q_plot_size_over = self._init_queue_size_info()
 
-        while not self.e_stop.is_set():
+        while not self.internal_stop.is_set():
 
             for name in self.recordings:
 
@@ -808,14 +804,14 @@ class RecordBase:
                                        q_size_over=self.q_save_size_over[name],
                                        q_type='Saving')
 
-                if self.e_graph.is_set():
+                if self.graph_request.is_set():
 
                     self._check_queue_size(name=name,
                                            q=self.q_save[name],
                                            q_size_over=self.q_save_size_over[name],
                                            q_type='Plotting')
 
-            self.e_stop.wait(self.dt_check)
+            self.internal_stop.wait(self.dt_check)
 
     @classmethod
     def create(cls,

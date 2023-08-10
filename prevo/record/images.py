@@ -280,7 +280,6 @@ class ImageRecord(RecordBase):
             windows.append(win)
 
         viewer = Viewer(windows,
-                        external_stop=self.e_stop,
+                        external_stop=self.internal_stop,
                         dt_graph=self.dt_graph)
         viewer.start()
-        self.e_graph.clear()

@@ -301,50 +301,40 @@ class NumericalGraphBase(GraphBase):
 
 class UpdateGraphBase:
 
-    def __init__(self, graph, q_plot,
-                 e_stop=None, e_close=None, e_graph=None,
-                 dt_graph=1, blit=False):
+    def __init__(self,
+                 graph,
+                 q_plot,
+                 external_stop=None,
+                 dt_graph=1,
+                 blit=False):
         """Update plot with data received from a queue.
 
         INPUTS
         ------
         - graph: object of GraphBase class and subclasses
         - q_plot: dict {name: queue} with sensor names and data queues
-        - e_stop (optional): external stop request, closes the figure if set
-        - e_close (optional) is set when the figure has been closed
-        - e_graph (optional) is set when the graph is activated
+        - external_stop (optional): external stop request, closes the figure if set
         - dt_graph: time interval to update the graph
         - blit: if True, use blitting to speed up the matplotlib animation
-
-        Attention, if the figure is closed, the e_close event is triggered so
-        do not put in e_close a threading event that is supposed to stay alive
-        even if the figure gets closed. Rather, use the e_stop event.
         """
         self.graph = graph
         self.q_plot = q_plot
-        self.e_stop = e_stop
-        self.e_close = e_close
-        self.e_graph = e_graph
+        self.external_stop = external_stop
         self.dt_graph = dt_graph
         self.blit = blit
 
         self.graph.fig.canvas.mpl_connect('close_event', self.on_fig_close)
 
     def on_fig_close(self, event):
-        """When figure is closed, set threading events accordingly."""
-        if self.e_close:
-            self.e_close.set()
-        if self.e_graph:
-            self.e_graph.clear()
+        """What to do when figure is closed (optional)."""
+        pass
 
     def plot_new_data(self, i=0):
         """define what to do at each loop of the matplotlib animation."""
 
-        if self.e_stop:
-            if self.e_stop.is_set():
+        if self.external_stop:
+            if self.external_stop.is_set():
                 plt.close(self.graph.fig)
-                # since figure is closed, e_close and e_graph are taken care of
-                # by the on_fig_close() function
 
         self.before_getting_measurements()
 

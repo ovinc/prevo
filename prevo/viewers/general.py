@@ -405,7 +405,6 @@ class ViewerBase:
     def __init__(self,
                  windows,
                  external_stop=None,
-                 internal_stop=None,
                  dt_graph=0.02):
         """Init ViewerBase object
 
@@ -415,13 +414,12 @@ class ViewerBase:
         - external_stop: stopping event (threading.Event or equivalent)
                          signaling stopping requested from outside of the class
                          (won't be set or cleared, just monitored)
-        - internal_stop: stopping event that will be set() when viewer stops.
         - dt_graph: how often (in seconds) the viewer is updated
         """
         self.windows = windows
         self.dt_graph = dt_graph
-        self.external_stop = external_stop if external_stop is not None else Event()
-        self.internal_stop = internal_stop if internal_stop is not None else Event()
+        self.external_stop = external_stop
+        self.internal_stop = Event()
 
     def _init_viewer(self):
         """Define in subclasses"""

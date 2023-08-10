@@ -145,7 +145,6 @@ class MplViewer(ViewerBase):
         - external_stop: stopping event (threading.Event or equivalent)
                          signaling stopping requested from outside of the class
                          (won't be set or cleared, just monitored)
-        - internal_stop: stopping event that will be set() when viewer stops.
         - dt_graph: how often (in seconds) the viewer is updated
         """
         self.blit = blit
@@ -183,7 +182,7 @@ class MplViewer(ViewerBase):
 
         if self.external_stop.is_set():
             # NOTE: the internal stop setting is managed by self._on_stop,
-            # which is automatically called by self.start()
+            # which is automatically called by self.start() in the end
             plt.close(self.fig)
 
         to_be_animated = ()

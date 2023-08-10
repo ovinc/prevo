@@ -19,7 +19,7 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-from .general import WindowBase, ViewerBase
+from .general import WindowBase, ViewerBase, max_possible_pixel_value
 from .tkinter import TkWindow, TkViewer
 from .opencv import CvWindow, CvViewer
 from .matplotlib import MplWindow, MplViewer

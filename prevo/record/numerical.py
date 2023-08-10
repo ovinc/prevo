@@ -215,7 +215,6 @@ class NumericalRecord(RecordBase):
         """What to do when graph event is triggered"""
         if self.data_types is None:
             print('WARNING --- No data types supplied. Graph not possible.')
-            self.e_graph.clear()
             return
 
         graph = NumericalGraph(names=self.numerical_recordings,
@@ -231,6 +230,5 @@ class NumericalRecord(RecordBase):
                            for name in self.numerical_recordings}
 
         graph.run(q_plot=numerical_queue,
-                  e_stop=self.e_stop,
-                  e_graph=self.e_graph,
+                  external_stop=self.internal_stop,
                   dt_graph=self.dt_graph)

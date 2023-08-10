@@ -90,7 +90,6 @@ class CvViewer(ViewerBase):
         - external_stop: stopping event (threading.Event or equivalent)
                          signaling stopping requested from outside of the class
                          (won't be set or cleared, just monitored)
-        - internal_stop: stopping event that will be set() when viewer stops.
         - dt_graph: how often (in seconds) the viewer is updated
         """
         super().__init__(windows=windows, **kwargs)
@@ -105,7 +104,12 @@ class CvViewer(ViewerBase):
         while (any(open_windows)):
             self._update_info()
             self._update_images()
-            if self.external_stop.is_set() or self.internal_stop.is_set():
+
+            if self.external_stop:
+                if self.external_stop.is_set():
+                    self.internal_stop.set()
+
+            if self.internal_stop.is_set():
                 for window in self.windows:
                     cv2.destroyWindow(window.name)
                 break

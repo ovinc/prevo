@@ -145,9 +145,12 @@ class NumericalGraph(NumericalGraphBase):
         n1, n2 = DISPOSITIONS[n]  # dimensions of grid to place elements
 
         if self.fig is None:
-            width = 4 * n2
-            height = 4 * n1
-            self.fig = plt.figure(figsize=(width, height))
+            self.fig = plt.figure()
+
+        width = 5 * n2
+        height = 3 * n1
+        self.fig.set_figheight(height)
+        self.fig.set_figwidth(width)
 
         self.axs = {}
         for i, datatype in enumerate(self.all_data_types):
@@ -288,8 +291,11 @@ class NumericalGraph(NumericalGraphBase):
             ax.relim()
             ax.autoscale_view(tight=True, scalex=True, scaley=True)
 
-    def run(self, q_plot, e_stop=None, e_close=None, e_graph=None,
-            dt_graph=0.1, blit=False):
+    def run(self,
+            q_plot,
+            external_stop=None,
+            dt_graph=0.1,
+            blit=False):
         """Run live view of plot with data from queues.
 
         (Convenience method to instantiate a UpdateGraph object)
@@ -297,17 +303,13 @@ class NumericalGraph(NumericalGraphBase):
         Parameters
         ----------
         - q_plot: dict {name: queue} with sensor names and data queues
-        - e_stop (optional): external stop request, closes the figure if set
-        - e_close (optional) is set when the figure has been closed
-        - e_graph (optional) is set when the graph is activated
+        - external_stop (optional): external stop request, closes the figure if set
         - dt graph: time interval to update the graph
         - blit: if True, use blitting to speed up the matplotlib animation
         """
         update_plot = UpdateGraph(graph=self,
                                   q_plot=q_plot,
-                                  e_stop=e_stop,
-                                  e_close=e_close,
-                                  e_graph=e_graph,
+                                  external_stop=external_stop,
                                   dt_graph=dt_graph,
                                   blit=blit)
         update_plot.run()
@@ -373,10 +375,8 @@ class PlotUpdatedData:
         self.graph = graph
         self.timer = oclock.Timer(interval=dt_data, name='Data Update')
         self.dt_graph = dt_graph
-
         self.queues = {name: Queue() for name in self.names}
-        self.e_graph = Event()
-        self.e_stop = Event()
+        self.internal_stop = Event()
 
     # Methods that need to be defined in subclasses --------------------------
 
@@ -392,15 +392,8 @@ class PlotUpdatedData:
         for name in self.names:
             Thread(target=self.get_data, args=(name,)).start()
 
-        self.e_graph.set()  # This is supposed to be set when graph is active.
-
-        # e_stop two times, because we want a figure closure event to also
-        # trigger stopping of the recording process here.
-
         self.graph.run(q_plot=self.queues,
-                       e_stop=self.e_stop,
-                       e_close=self.e_stop,
-                       e_graph=self.e_graph,
+                       external_stop=self.internal_stop,
                        dt_graph=self.dt_graph)
 
 
@@ -427,7 +420,7 @@ class PlotLiveSensors(PlotUpdatedData):
 
         with recording.Sensor() as sensor:
 
-            while not self.e_stop.is_set():
+            while not self.internal_stop.is_set():
                 try:
                     data = sensor.read()
                 except SensorError:
@@ -479,7 +472,7 @@ class PlotSavedDataUpdated(PlotUpdatedData, PlotSavedData):
 
         n0 = saved_data.number_of_measurements()
 
-        while not self.e_stop.is_set():
+        while not self.internal_stop.is_set():
 
             n = saved_data.number_of_measurements()
 
