@@ -40,6 +40,13 @@ CONFIG = {
 }
 
 
+# How to place elements on window as a function of number of widgets
+DISPOSITIONS = {1: (1, 1),
+                2: (1, 2),
+                3: (1, 3),
+                4: (2, 2)}
+
+
 # =============================== MISC. Tools ================================
 
 
@@ -198,9 +205,6 @@ class LiveImageNumber(InfoSender):
             return f'[# {self.last_num}]'
 
 
-# =============================== Base classes ===============================
-
-
 class MeasurementFormatter:
     """How to transform elements from the queue into image arrays and img number.
 
@@ -224,6 +228,13 @@ class MeasurementFormatter:
         return measurement['num']
 
 
+default_measurement_formatter = MeasurementFormatter()
+
+
+
+# =============================== Base classes ===============================
+
+
 class WindowBase:
     """Base class for windows managing single image queues."""
 
@@ -235,7 +246,7 @@ class WindowBase:
                  show_num=False,
                  dt_fps=2,
                  dt_num=0.2,
-                 DataFormatter=MeasurementFormatter,
+                 measurement_formatter=default_measurement_formatter,
                  ):
         """Init Window object.
 
@@ -248,11 +259,12 @@ class WindowBase:
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    a different DataFormatter must be provided)
+                    a different data_formatter must be provided)
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
-        - DataFormatter: class that transforms elements from the queue
-                         into image arrays and image numbers.
+        - measurement_formatter: object that transforms elements from the
+                                 queue into image arrays and image numbers
+                                 (type MeasurementFormatter or equivalent)
         """
         self.image_queue = image_queue
         self.name = name
@@ -261,13 +273,13 @@ class WindowBase:
         self.show_fps = show_fps
         self.show_num = show_num
 
-        self.measurement_formatter = DataFormatter()
+        self.measurement_formatter = measurement_formatter
         self.stop_event = Event()
 
         try:
             self._init_info(dt_fps=dt_fps, dt_num=dt_num)
         except Exception:
-            print(f'--- !!! Error in  {self.name} Viewer Init !!! ---')
+            print(f'--- !!! Error in  {self.name} Window Init !!! ---')
             print_exc()
             self._on_stop()
 

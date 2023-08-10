@@ -27,7 +27,9 @@ The package contains various modules:
 
 - `prevo.misc`: miscellaneous tools, including dummy sensors and devices.
 
-See Jupyter notebooks in `examples/` and docstrings for more help. Below is also an example showing the workflow for defining objects for periodic recording.
+See Jupyter notebooks in `examples/` and docstrings for more help.
+
+Below are also minimal examples showing implementation of periodic recording and image viewers.
 
 
 Install
@@ -108,6 +110,31 @@ A minimal example is provided below, to record pressure and temperature asynchro
 Note: context managers also possible (i.e. define `__enter__` and `__exit__` in `Sensor` class) e.g. if sensors have to be opened once at the beginning and closed in the end.
 
 Many other options and customizations exist (e.g. live view of data, sensor properties controlled in real time in CLI, etc.). See docstrings for more help and `examples/Record.ipynb` for examples.
+
+
+Live image viewer
+=================
+
+Let's assume one gets image data in a queue from a camera.
+Individual elements from the `camera.queue`` are dictionaries with keys `image` (numpy-like image array) and `num` (image number, an integer). This formatting of elements in the queue is assumed by default, but others are possible (see *examples/Viewers.ipynb*).
+
+It is possible to view the images using either `tkinter`, `opencv` or `matplotlib`. Here we will use tkinter.
+One first has to define a *window* in which to display the images, and then a *viewer* to operate and update the window.
+
+
+```python
+from prevo.viewers import TkWindow, TkViewer
+
+# The window will show the (display) fps and the image number in real time
+window = TkWindow(camera.queue, show_fps=True, show_num=True)
+
+# It is possible to run several windows in parallel from other image sources
+# Here we have just one.
+viewer = TkViewer(windows=(window,))
+viewer.start()
+```
+
+Here again, various options and customizations are possible, see some example in *examples/Viewers.ipynb*.
 
 
 Misc. info

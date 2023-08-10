@@ -71,6 +71,7 @@ class OscilloGraph(NumericalGraphBase):
                  data_types,
                  data_ranges,
                  window_width=10,
+                 fig=None,
                  colors=None,
                  legends=None,
                  linestyles=None,
@@ -89,6 +90,7 @@ class OscilloGraph(NumericalGraphBase):
                        as values. Used to set ylims of graph initially.
                       (dict can have more keys than actual data types used)
         - window_width: width (in seconds) of the displayed window
+        - fig (optional): matplotlib figure in which to draw the graph.
         - colors: optional dict of colors with keys 'fig', 'ax', 'bar' and the
                   names of the recordings.
         - legends: optional dict of legend names (iterable) corresponding to
@@ -115,6 +117,7 @@ class OscilloGraph(NumericalGraphBase):
 
         super().__init__(names=names,
                          data_types=data_types,
+                         fig=fig,
                          colors=colors,
                          legends=legends,
                          linestyles=linestyles,

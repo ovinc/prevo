@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 from .general import max_possible_pixel_value
-from .general import WindowBase, ViewerBase, CONFIG
+from .general import WindowBase, ViewerBase, CONFIG, DISPOSITIONS
 
 
 class MplWindow(WindowBase):
@@ -50,11 +50,12 @@ class MplWindow(WindowBase):
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    a different DataFormatter must be provided)
+                    a different data_formatter must be provided)
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
-        - DataFormatter: class that transforms elements from the queue
-                         into image arrays and image numbers.
+        - measurement_formatter: object that transforms elements from the
+                                 queue into image arrays and image numbers
+                                 (type MeasurementFormatter or equivalent)
 
         NOTE: self.ax must be defined before calling various window methods.
         """
@@ -125,6 +126,7 @@ class MplViewer(ViewerBase):
 
     def __init__(self,
                  windows,
+                 fig=None,
                  blit=True,
                  **kwargs):
         """
@@ -134,6 +136,7 @@ class MplViewer(ViewerBase):
         ----------
 
         - windows: iterable of objects of type WindowBase or subclasses
+        - fig: (optional): matplotlib figure in which to create the viewer.
         - blit: if True, use blitting for faster rendering (can cause issues
                 for updating info such as fps, image number)
 
@@ -146,20 +149,22 @@ class MplViewer(ViewerBase):
         - dt_graph: how often (in seconds) the viewer is updated
         """
         self.blit = blit
+        self.fig = fig
         super().__init__(windows=windows, **kwargs)
 
     def _init_viewer(self):
         """Generate figure/axes as a function of input names"""
 
-        if len(self.windows) == 1:
-            self.fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-            axes = ax,
-        elif len(self.windows) == 2:
-            self.fig, axes = plt.subplots(1, 2, figsize=(15, 8))
-        else:
-            raise Exception('Only 2 simultaneous image queues supported for now.')
+        n = len(self.windows)
+        n1, n2 = DISPOSITIONS[n]  # dimensions of grid to place elements
 
-        for window, ax in zip(self.windows, axes):
+        if self.fig is None:
+            width = 4 * n2
+            height = 4 * n1
+            self.fig = plt.figure(figsize=(width, height))
+
+        for i, window in enumerate(self.windows):
+            ax = self.fig.add_subplot(n1, n2, i + 1)
             window.ax = ax
 
         self.fig.set_facecolor(CONFIG['bgcolor'])

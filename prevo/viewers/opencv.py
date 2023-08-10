@@ -46,11 +46,12 @@ class CvWindow(WindowBase):
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    a different DataFormatter must be provided)
+                    a different data_formatter must be provided)
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
-        - DataFormatter: class that transforms elements from the queue
-                         into image arrays and image numbers.
+        - measurement_formatter: object that transforms elements from the
+                                 queue into image arrays and image numbers
+                                 (type MeasurementFormatter or equivalent)
         """
         super().__init__(image_queue, name=name, **kwargs)
 

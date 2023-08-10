@@ -31,7 +31,11 @@ from matplotlib.animation import FuncAnimation
 from matplotlib import cm
 
 
-# ----------------------------------------------------------------------------
+# How to place elements on window as a function of number of widgets
+DISPOSITIONS = {1: (1, 1),
+                2: (1, 2),
+                3: (1, 3),
+                4: (2, 2)}
 
 
 class GraphBase(ABC):
@@ -81,6 +85,7 @@ class NumericalGraphBase(GraphBase):
     def __init__(self,
                  names,
                  data_types,
+                 fig=None,
                  colors=None,
                  legends=None,
                  linestyles=None,
@@ -94,6 +99,7 @@ class NumericalGraphBase(GraphBase):
         - data types: dict with the recording names as keys, and the
                       corresponding data types as values.
                       (dict can have more keys than those in 'names')
+        - fig (optional): matplotlib figure in which to draw the graph.
         - colors: optional dict of colors with keys 'fig', 'ax', and the
                     names of the recordings.
         - legends: optional dict of legend names (iterable) corresponding to
@@ -116,6 +122,7 @@ class NumericalGraphBase(GraphBase):
         """
         self.names = names
         self.data_types = {name: data_types[name] for name in self.names}
+        self.fig = fig
         self.colors = colors
         self.legends = legends if legends is not None else {}
         self.linestyles = linestyles if linestyles is not None else {}

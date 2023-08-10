@@ -26,15 +26,24 @@ import prevo
 # Local imports
 from .general import RecordingBase, RecordBase
 from ..csv import CsvFile
-from ..viewers import CvMultipleViewer
-from ..viewers import MplMultipleViewer
-from ..viewers import TkMultipleViewer
+from ..viewers import CvWindow, CvViewer
+from ..viewers import TkWindow, TkViewer
+from ..viewers import MplWindow, MplViewer
 
 # Optional, nonstandard
 try:
     from PIL import Image
 except ModuleNotFoundError:
     pass
+
+
+Windows = {'cv': CvWindow,
+           'mpl': MplWindow,
+           'tk': TkWindow}
+
+Viewers = {'cv': CvViewer,
+           'mpl': MplViewer,
+           'tk': TkViewer}
 
 
 class ImageRecording(RecordingBase):
@@ -178,7 +187,7 @@ class ImageRecord(RecordBase):
                  recordings,
                  metadata_filename='Images_Metadata.json',
                  checked_modules=(),
-                 dt_graph=0.1,
+                 dt_graph=0.02,
                  viewer='tk',
                  dirty_ok=True,
                  **kwargs):
@@ -261,19 +270,17 @@ class ImageRecord(RecordBase):
     def data_plot(self):
         """What to do when graph event is triggered"""
 
-        Viewers = {'cv': CvMultipleViewer,
-                   'mpl': MplMultipleViewer,
-                   'tk': TkMultipleViewer}
+        Viewer = Viewers[self.viewer]
+        Window = Windows[self.viewer]
 
-        # In case the queue contains other measurements than images
-        # (e.g. numerical data from temperature sensors, etc.)
-        image_queues = {name: self.q_plot[name]
-                        for name in self.image_recordings}
+        windows = []
+        for name in self.image_recordings:
+            image_queue = self.q_plot[name]
+            win = Window(image_queue, name=name, show_num=True, show_fps=True)
+            windows.append(win)
 
-        kwargs = {'image_queues': image_queues,
-                  'e_stop': self.e_stop,
-                  'dt_graph': self.dt_graph,
-                  'show_num': True}
-
-        Viewers[self.viewer](**kwargs).start()
+        viewer = Viewer(windows,
+                        external_stop=self.e_stop,
+                        dt_graph=self.dt_graph)
+        viewer.start()
         self.e_graph.clear()

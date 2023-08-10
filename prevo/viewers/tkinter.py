@@ -25,14 +25,7 @@ import tkinter as tk
 import itertools
 from PIL import Image, ImageTk
 
-from .general import WindowBase, ViewerBase, CONFIG
-
-
-# How to place elements on window as a function of number of widgets
-DISPOSITIONS = {1: (1, 1),
-                2: (1, 2),
-                3: (1, 3),
-                4: (2, 2)}
+from .general import WindowBase, ViewerBase, CONFIG, DISPOSITIONS
 
 
 class TkWindow(WindowBase):
@@ -57,11 +50,12 @@ class TkWindow(WindowBase):
         - show_fps: if True, indicate current display fps on viewer
         - show_num: if True, indicate current image number on viewer
                     (note: image data must be a dict with key 'num', or
-                    a different DataFormatter must be provided)
+                    a different data_formatter must be provided)
         - dt_fps: how often (in seconds) display fps are calculated
         - dt_num: how often (in seconds) image numbers are updated
-        - DataFormatter: class that transforms elements from the queue
-                         into image arrays and image numbers.
+        - measurement_formatter: object that transforms elements from the
+                                 queue into image arrays and image numbers
+                                 (type MeasurementFormatter or equivalent)
         """
         super().__init__(image_queue, **kwargs)
         self.auto_size = auto_size

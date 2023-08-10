@@ -32,10 +32,9 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from matplotlib.lines import Line2D
 import oclock
 
-from .general import NumericalGraphBase, UpdateGraphBase
+from .general import NumericalGraphBase, UpdateGraphBase, DISPOSITIONS
 from ..record import SensorError
 
 # The two lines below have been added following a console FutureWarning:
@@ -76,6 +75,7 @@ class NumericalGraph(NumericalGraphBase):
     def __init__(self,
                  names,
                  data_types,
+                 fig=None,
                  colors=None,
                  legends=None,
                  linestyles=None,
@@ -90,6 +90,7 @@ class NumericalGraph(NumericalGraphBase):
         - data types: dict with the recording names as keys, and the
                       corresponding data types as values.
                       (dict can have more keys than those in 'names')
+        - fig (optional): matplotlib figure in which to draw the graph.
         - colors: optional dict of colors with keys 'fig', 'ax', and the
                   names of the recordings.
         - legends: optional dict of legend names (iterable) corresponding to
@@ -113,6 +114,7 @@ class NumericalGraph(NumericalGraphBase):
 
         super().__init__(names=names,
                          data_types=data_types,
+                         fig=fig,
                          colors=colors,
                          legends=legends,
                          linestyles=linestyles,
@@ -135,26 +137,23 @@ class NumericalGraph(NumericalGraphBase):
     def create_axes(self):
         """Generate figure/axes as a function of input data types"""
 
-        if len(self.all_data_types) == 4:
-            fig, axes = plt.subplots(2, 2, figsize=(10, 9))
-        if len(self.all_data_types) == 3:
-            fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-        elif len(self.all_data_types) == 2:
-            fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-        elif len(self.all_data_types) == 1:
-            fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-            axes = ax,
-        else:
+        n = len(self.all_data_types)
+        if n > 4:
             msg = f'Mode combination {self.all_data_types} not supported yet'
             raise Exception(msg)
 
-        axs = {}
-        for ax, datatype in zip(axes, self.all_data_types):
-            ax.set_ylabel(datatype)
-            axs[datatype] = ax
+        n1, n2 = DISPOSITIONS[n]  # dimensions of grid to place elements
 
-        self.fig = fig
-        self.axs = axs
+        if self.fig is None:
+            width = 4 * n2
+            height = 4 * n1
+            self.fig = plt.figure(figsize=(width, height))
+
+        self.axs = {}
+        for i, datatype in enumerate(self.all_data_types):
+            ax = self.fig.add_subplot(n1, n2, i + 1)
+            ax.set_ylabel(datatype)
+            self.axs[datatype] = ax
 
     def format_graph(self):
         """Set colors, time formatting, etc."""
