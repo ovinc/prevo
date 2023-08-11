@@ -24,9 +24,32 @@ from threading import Thread
 from random import random
 from queue import Queue
 from statistics import mean
+from pathlib import Path
 
 import oclock
 import numpy as np
+
+# ========================== Misc. file management ===========================
+
+
+def increment_filename(file):
+    """Find an increment on file name, e.g. -1, -2 etc. to create file
+    that does not exist.
+
+    Convenient for some uses, e.g. not overwrite metadata file, etc.
+    """
+    full_name_str = str(file.absolute())
+    success = False
+    n = 0
+    while not success:
+        n += 1
+        new_stem = f'{file.stem}-{n}'
+        new_name = full_name_str.replace(file.stem, new_stem)
+        new_file = Path(new_name)
+        if not new_file.exists():
+            success = True
+    return new_file
+
 
 # =========================== Dataname management ============================
 

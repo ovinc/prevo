@@ -104,16 +104,17 @@ class InfoSender(ABC):
     """
     def __init__(self,
                  queue=None,
-                 e_stop=None,
                  dt_check=1):
-        """Parameters:
+        """Init info sender object
+
+        Parameters
+        ----------
 
         - queue: queue into information is put
-        - e_stop: stopping event (threading.Event or equivalent)
         - dt_check: how often (in seconds) information is sent
         """
         self.queue = Queue() if queue is None else queue
-        self.e_stop = Event() if e_stop is None else e_stop
+        self.internal_stop = Event()
         self.dt_check = dt_check
 
     @abstractmethod
@@ -127,17 +128,20 @@ class InfoSender(ABC):
     def _run(self):
         """Send information periodically (blocking)."""
 
-        while not self.e_stop.is_set():
+        while not self.internal_stop.is_set():
             info = self._generate_info()
             self.queue.put(info)
 
             # dt_check should be long compared to the time required to
             # process and generate the info.
-            self.e_stop.wait(self.dt_check)
+            self.internal_stop.wait(self.dt_check)
 
     def start(self):
         """Same as _run() but nonblocking."""
         Thread(target=self._run).start()
+
+    def stop(self):
+        self.internal_stop.set()
 
 
 class LiveFpsCalculator(InfoSender):
@@ -149,16 +153,14 @@ class LiveFpsCalculator(InfoSender):
     def __init__(self,
                  time_queue,
                  queue=None,
-                 e_stop=None,
                  dt_check=1):
         """Parameters:
 
         - time_queue: queue from which display times arrive
         - queue: queue into which fps values are put
-        - e_stop: stopping event (threading.Event or equivalent)
         - dt_check: how often (in seconds) times are checked to calculate fps
         """
-        super().__init__(queue=queue, e_stop=e_stop, dt_check=dt_check)
+        super().__init__(queue=queue, dt_check=dt_check)
         self.time_queue = time_queue
 
     def _generate_info(self):
@@ -180,16 +182,14 @@ class LiveImageNumber(InfoSender):
     def __init__(self,
                  num_queue,
                  queue=None,
-                 e_stop=None,
                  dt_check=1):
         """Parameters:
 
         - num_queue: queue from which image numbers arrive
         - queue: queue into which output values are put
-        - e_stop: stopping event (threading.Event or equivalent)
         - dt_check: how often (in seconds) times are checked to calculate fps
         """
-        super().__init__(queue=queue, e_stop=e_stop, dt_check=dt_check)
+        super().__init__(queue=queue, dt_check=dt_check)
         self.num_queue = num_queue
         self.last_num = None
 
@@ -274,14 +274,14 @@ class WindowBase:
         self.show_num = show_num
 
         self.measurement_formatter = measurement_formatter
-        self.stop_event = Event()
+        self.internal_stop = Event()
 
         try:
             self._init_info(dt_fps=dt_fps, dt_num=dt_num)
         except Exception:
             print(f'--- !!! Error in  {self.name} Window Init !!! ---')
             print_exc()
-            self._on_stop()
+            self.stop()
 
     def __repr__(self):
         return f'{self.__class__.__name__} ({self.name})'
@@ -289,6 +289,7 @@ class WindowBase:
     def _init_info(self, **kwargs):
         """Init info objects that manage printing of fps, img number etc."""
 
+        self.info_senders = []
         self.info_queues = {}
         self.info_values = {}
 
@@ -299,20 +300,19 @@ class WindowBase:
         if self.show_fps:
             self.display_times_queue = Queue()  # to calculate fps on partial data
             fps_calculator = LiveFpsCalculator(time_queue=self.display_times_queue,
-                                               # To stop thread when viewer is closed
-                                               e_stop=self.stop_event,
                                                dt_check=kwargs.get('dt_fps'))
             self.info_queues['fps'] = fps_calculator.queue
             self.info_values['fps'] = ''
+            self.info_senders.append(fps_calculator)
             fps_calculator.start()
 
         if self.show_num:
             self.image_number_queue = Queue()
             image_number = LiveImageNumber(num_queue=self.image_number_queue,
-                                           e_stop=self.stop_event,
                                            dt_check=kwargs.get('dt_num'))
             self.info_queues['num'] = image_number.queue
             self.info_values['num'] = ''
+            self.info_senders.append(image_number)
             image_number.start()
 
     def _store_display_times(self):
@@ -388,9 +388,14 @@ class WindowBase:
         # (e.g. if data is None, do nothing else)
         return data
 
-    def _on_stop(self):
+    def stop(self):
         """What to do when live viewer is stopped"""
-        self.stop_event.set()
+        self.internal_stop.set()
+
+        # Stop threads that caculate fps, img number etc.
+        for info_sender in self.info_senders:
+            info_sender.stop()
+
         if self.calculate_fps:
             if len(self.display_times) > 1:
                 fps = 1 / np.diff(self.display_times).mean()
@@ -428,16 +433,6 @@ class ViewerBase:
         """Define in subclasses"""
         pass
 
-    def start(self):
-        try:
-            self._init_viewer()
-            self._init_windows()
-            self._run()
-        except Exception:
-            print('--- !!! Error in Viewer !!! ---')
-            print_exc()
-        self._on_stop()
-
     def _init_windows(self):
         for window in self.windows:
             window._init_window()
@@ -450,7 +445,22 @@ class ViewerBase:
         for window in self.windows:
             window._update_image()
 
-    def _on_stop(self):
+    def _check_external_stop(self):
+        if self.external_stop:
+            if self.external_stop.is_set():
+                self.stop()
+
+    def start(self):
+        try:
+            self._init_viewer()
+            self._init_windows()
+            self._run()
+        except Exception:
+            print('--- !!! Error in Viewer !!! ---')
+            print_exc()
+        self.stop()
+
+    def stop(self):
         self.internal_stop.set()
         for window in self.windows:
-            window._on_stop()
+            window.stop()

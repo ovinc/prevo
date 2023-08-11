@@ -46,7 +46,7 @@ Record sensors periodically
 For using the package for asynchronous recording of data, three base classes must/can be subclassed:
 - `SensorBase`
 - `RecordingBase` (children: `NumericalRecording`, `ImageRecording`)
-- `RecordBase` (children: `NumericalRecord`, `ImageRecord`)
+- `Record` (children: `NumericalRecord`, `ImageRecord`)
 
 A minimal example is provided below, to record pressure and temperature asynchronously into a CSV file, assuming the user already has classes (`Temp`, `Gauge`) to take single-point measurements (it could be functions as well). See `examples/Record.ipynb` for more detailed examples, including periodic recording of images from several cameras.
 
@@ -72,7 +72,10 @@ A minimal example is provided below, to record pressure and temperature asynchro
             return Gauge.read()
     ```
 
-1) **Define the individual recordings**
+    Note: context managers also possible (i.e. define `__enter__` and `__exit__` in `Sensor` class) e.g. if sensors have to be opened once at the beginning and closed in the end.
+
+
+2) **Define the individual recordings**
 
     ```python
     from prevo.record.numerical import NumericalRecording
@@ -97,7 +100,37 @@ A minimal example is provided below, to record pressure and temperature asynchro
     )
     ```
 
-1) **Define and start asynchronous recording of all sensors**
+    **NOTE**: the recordings are already usable as is if one does not need fancy functionality.
+    For example, one can start a periodic recording of pressure every two seconds with
+
+    ```python
+    recording.start(dt=2)
+    ```
+
+    And the following methods and attributes are available:
+    ```python
+    # can be set to True or False to pause/resume recording
+    recording.active
+
+    # Equivalent to playing with .active:
+    recording.pause()
+    recording.resume()
+
+    recording_P.stop()
+    # After a stop(), it is possible to call start() again.
+
+    # To change the time interval between data:
+    recording.timer.interval = ...
+
+    # To record data as fast as possible:
+    recording.continuous = True
+    ```
+
+    **NOTE**: `recording.start()` is non-blocking, so several independent recordings can be started at the same time, and can be changed in real time with the methods/attribute above. However, a convenient interface to manage several recordings simultaneously is provided by the `Record` class, see below.
+
+3) **`Record` interface for managing simultaneous recordings**
+
+    `Record` provides a real-time CLI to manage recordings properties in real time as well as live data visualization.
 
     ```python
     from prevo.record.numerical import NumericalRecord
@@ -107,9 +140,7 @@ A minimal example is provided below, to record pressure and temperature asynchro
     record.start(dt=2)  # time interval of 2 seconds for both sensors
     ```
 
-Note: context managers also possible (i.e. define `__enter__` and `__exit__` in `Sensor` class) e.g. if sensors have to be opened once at the beginning and closed in the end.
-
-Many other options and customizations exist (e.g. live view of data, sensor properties controlled in real time in CLI, etc.). See docstrings for more help and `examples/Record.ipynb` for examples.
+Many other options and customizations exist See docstrings for more help and `examples/Record.ipynb` for examples.
 
 
 Live image viewer

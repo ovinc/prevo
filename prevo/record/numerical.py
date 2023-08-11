@@ -25,9 +25,10 @@ import gittools
 import prevo
 
 # Local imports
-from .general import RecordBase, RecordingBase
+from .general import RecordingBase, Record
 from ..csv import CsvFile
 from ..plot import NumericalGraph
+from ..misc import increment_filename
 
 
 class NumericalRecording(RecordingBase):
@@ -128,7 +129,7 @@ class NumericalRecording(RecordingBase):
         self.file_manager._write_line(time_info + value_info, file=file)
 
 
-class NumericalRecord(RecordBase):
+class NumericalRecord(Record):
     """Class managing simultaneous temporal recordings of numerical sensors"""
 
     def __init__(self,
@@ -197,7 +198,7 @@ class NumericalRecord(RecordBase):
         metadata_file = self.path / filename
 
         if metadata_file.exists():
-            metadata_file = self.increment_filename(metadata_file)
+            metadata_file = increment_filename(metadata_file)
 
         gittools.save_metadata(metadata_file,
                                module=self.checked_modules,
@@ -226,11 +227,11 @@ class NumericalRecord(RecordBase):
 
         # In case the queue contains other measurements than numerical
         # (e.g. images from cameras)
-        numerical_queue = {
+        numerical_queues = {
             name: recording.queues['plotting']
             for name, recording in self.numerical_recordings.items()
         }
 
-        graph.run(q_plot=numerical_queue,
+        graph.run(q_plot=numerical_queues,
                   external_stop=self.internal_stop,
                   dt_graph=self.dt_graph)

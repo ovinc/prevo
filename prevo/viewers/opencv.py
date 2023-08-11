@@ -104,17 +104,13 @@ class CvViewer(ViewerBase):
         while (any(open_windows)):
             self._update_info()
             self._update_images()
-
-            if self.external_stop:
-                if self.external_stop.is_set():
-                    self.internal_stop.set()
-
+            self._check_external_stop()
             if self.internal_stop.is_set():
                 for window in self.windows:
                     cv2.destroyWindow(window.name)
                 break
             cv2.waitKey(int(self.dt_graph * 1000))
 
-    def _on_stop(self):
-        super()._on_stop()
+    def stop(self):
+        super().stop()
         cv2.destroyAllWindows()

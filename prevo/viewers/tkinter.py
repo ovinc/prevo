@@ -219,15 +219,10 @@ class TkViewer(ViewerBase):
     def _update(self):
         self._update_info()
         self._update_images()
-        if self.external_stop.is_set():
-            # NOTE: the internal stop setting is managed by self._on_stop,
-            # which is automatically called by self.start() in the end
-            self._on_close()
-            return
+        self._check_external_stop()
         self.loop = self.root.after(int(1000 * self.dt_graph), self._update)
 
-    def _on_close(self):
-        """Callback to user manually closing window"""
+    def _cancel_loop(self):
         try:
             loop = self.loop
         except AttributeError:  # in case after() has not been called yet
@@ -235,4 +230,16 @@ class TkViewer(ViewerBase):
         else:
             self.root.after_cancel(loop)
 
+    def _on_close(self):
+        """Callback to user manually closing window"""
+        self._cancel_loop()
         self.root.destroy()  # without this the window doesn't get closed
+
+    def stop(self):
+        self._cancel_loop()
+        # If application still active, close tk window
+        try:
+            self.root.destroy()
+        except tk.TclError:
+            pass
+        super().stop()

@@ -20,5 +20,10 @@
 # If not, see <https://www.gnu.org/licenses/>
 
 from .general import SensorBase, SensorError
-from .general import RecordingBase, RecordBase
+from .general import RecordingBase, Record
 from .general import ControlledEvent, ControlledProperty
+
+# NOTE -- DO NOT include the line below, because it results in circular
+# imports problem with prevo.plot (NumericalGraph)
+# from .numerical import NumericalRecording, NumericalRecord
+# from .images import ImageRecording, ImageRecord

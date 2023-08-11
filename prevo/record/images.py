@@ -24,11 +24,12 @@ import gittools
 import prevo
 
 # Local imports
-from .general import RecordingBase, RecordBase
+from .general import RecordingBase, Record
 from ..csv import CsvFile
 from ..viewers import CvWindow, CvViewer
 from ..viewers import TkWindow, TkViewer
 from ..viewers import MplWindow, MplViewer
+from ..misc import increment_filename
 
 # Optional, nonstandard
 try:
@@ -183,7 +184,7 @@ class ImageRecording(RecordingBase):
         return {}
 
 
-class ImageRecord(RecordBase):
+class ImageRecord(Record):
     """Main class managing simultaneous temporal recordings of images."""
 
     def __init__(self,
@@ -239,7 +240,7 @@ class ImageRecord(RecordBase):
         metadata_file = self.path / filename
 
         if metadata_file.exists():
-            metadata_file = self.increment_filename(metadata_file)
+            metadata_file = increment_filename(metadata_file)
 
         info = {}
 

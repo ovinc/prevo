@@ -146,7 +146,11 @@ active_ppty = ControlledProperty(attribute='active',
 
 
 class RecordingBase(ABC):
-    """Base class for recording object used by RecordBase. To subclass"""
+    """Base class for recording sensor periodically.
+
+    Can be used as is, or can be fed to the Record class for extra features
+    (live graph, metadata saving, etc.)
+    """
 
     # Warnings when queue size goes over some limits
     queue_warning_limits = 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9
@@ -213,7 +217,12 @@ class RecordingBase(ABC):
         self.dt_save = dt_save
         self.dt_check = dt_check
 
-        self.active = active  # can be set to False to temporarily stop recording from sensor
+        # NOTE: DO NOT change to self.active = active because this can cause
+        # problems upon init of the recording when self.sensor is not defined
+        # yet, if the active setter uses properties of the sensor (e.g. to
+        # turn it on or off)
+        self._active = active  # can be set to False to temporarily stop recording from sensor
+
         self.continuous = continuous
 
         # To be defined in subclass.
@@ -391,14 +400,11 @@ class RecordingBase(ABC):
 
     # ======================= Data reading from sensor =======================
 
-    @try_func
-    def data_read(self):
-        """Read data from sensor and store it in data queues."""
+    def _data_read(self):
+        """Reading data when the sensor context manager is active.
 
-        # Can be done here because if recording not active, the loop does not
-        # put measurements in any queue anyway.
-        self.activate_queue('saving')
-
+        (see self.data_read())
+        """
         failed_reading = False  # True temporarily if reading fails
 
         # Without this here, the first data points are irregularly spaced.
@@ -417,6 +423,7 @@ class RecordingBase(ABC):
 
             # Measurement has failed .........................................
             except SensorError:
+                print_exc()
                 if not failed_reading:  # means it has not failed just before
                     self.print_info_on_failed_reading('failed')
                 failed_reading = True
@@ -439,6 +446,22 @@ class RecordingBase(ABC):
             finally:
                 if not self.continuous:
                     self.timer.checkpt()
+
+    @try_func
+    def data_read(self):
+        """Read data from sensor and store it in data queues."""
+
+        # Can be done here because if recording not active, the loop does not
+        # put measurements in any queue anyway.
+        self.activate_queue('saving')
+
+        with self.Sensor() as self.sensor:
+            # Initial setting of properties is done here in case one of the
+            # properties acts on the sensor object, which is not defined
+            # before this point.
+            self._apply_ppties()
+            self._start_programs()
+            self._data_read()
 
     # ========================== Write data to file ==========================
 
@@ -566,10 +589,10 @@ class RecordingBase(ABC):
 
     # ====================== Start / stop recording ==========================
 
-    def _apply_ppties(self, **ppty_kwargs):
+    def _apply_ppties(self):
         # Note: (_set_property() does not do anything if the property
         # does not exist for the recording of interest)
-        for ppty_cmd, value in ppty_kwargs.items():
+        for ppty_cmd, value in self.ppty_kwargs.items():
             ppty = self.ppty_commands[ppty_cmd]
             self._set_property(ppty=ppty, value=value)
 
@@ -578,40 +601,36 @@ class RecordingBase(ABC):
         for program in self.programs:
             program.run()
 
+    def _start_threads(self):
+        """Start threads to read, save data etc."""
+        for func in self.data_read, self.data_save, self.check_queue_sizes:
+            thread = Thread(target=func)
+            thread.start()
+            # This is to be able to join threads in other programs using
+            # the recording (i.e. wait for recording to finish)
+            self.threads.append(thread)
+
     def start(self, **ppty_kwargs):
         """Start recording (nonblocking)"""
 
         # To be able to restart the recording after calling stop()
         self.internal_stop.clear()
+        self.ppty_kwargs = ppty_kwargs
 
         try:
-            with self.Sensor() as self.sensor:
-
-                # Initial setting of properties is done here in case one of the
-                # properties acts on the sensor object, which is not defined
-                # before this point.
-                self._apply_ppties(**ppty_kwargs)
-                self._start_programs()
-
-                read_thread = Thread(target=self.data_read)
-                read_thread.start()
-
-            save_thread = Thread(target=self.data_save)
-            save_thread.start()
-
-            qcheck_thread = Thread(target=self.check_queue_sizes)
-            qcheck_thread.start()
-
-            # This is to be able to join threads in other programs using
-            # the recording (i.e. wait for recording to finish)
-            self.threads.extend([read_thread, save_thread, qcheck_thread])
-
+            self._start_threads()
         # Typically an exception will be thrown only by the with statement
         # or ppties and programs, because the threads are in try_func decorator
         except (Exception, KeyboardInterrupt):
             print(f'Error for {self.name}. Stopping recording.')
             print_exc()
             self.stop()
+
+    def pause(self):
+        self.active = False
+
+    def resume(self):
+        self.active = True
 
     def stop(self):
         self.internal_stop.set()
@@ -628,7 +647,7 @@ class RecordingBase(ABC):
 # ----------------------------------------------------------------------------
 
 
-class RecordBase:
+class Record:
     """Asynchronous recording of several Recordings objects.
 
     Recordings objects are of type RecordingBase or subclasses."""
@@ -678,27 +697,6 @@ class RecordBase:
         """What to do with data when graph event is triggered"""
         pass
 
-    # ============================= Misc methods =============================
-
-    @staticmethod
-    def increment_filename(file):
-        """Find an increment on file name, e.g. -1, -2 etc. to create file
-        that does not exist.
-
-        Convenient for some uses, e.g. not overwrite metadata file, etc.
-        """
-        full_name_str = str(file.absolute())
-        success = False
-        n = 0
-        while not success:
-            n += 1
-            new_stem = f'{file.stem}-{n}'
-            new_name = full_name_str.replace(file.stem, new_stem)
-            new_file = Path(new_name)
-            if not new_file.exists():
-                success = True
-        return new_file
-
     # ============================= INIT METHODS =============================
 
     def create_events(self):
@@ -740,7 +738,7 @@ class RecordBase:
 
         # Apply first global values to all recordings ------------------------
         for ppty_cmd, value in global_commands.items():
-            for name, in self.recordings:
+            for name in self.recordings:
                 initial_ppty_settings[name][ppty_cmd] = value
 
         # Then apply commands to specific recordings if specified ------------
@@ -780,7 +778,6 @@ class RecordBase:
         self.threads = []
 
         try:
-
             # Check if user inputs particular initial settings for recordings
             init_ppties = self.parse_initial_user_commands(ppty_kwargs)
 
@@ -788,7 +785,12 @@ class RecordBase:
             for name, recording in self.recordings.items():
                 recording.start(**init_ppties[name])
 
-            self.save_metadata()
+            # This is because in some situations save_metadata can take some
+            # time, e.g. because it waits for sensors to be fully instantiated
+            # to get info from them.
+            metadata_thread = Thread(target=self.save_metadata)
+            metadata_thread.start()
+            self.threads.append(metadata_thread)
 
             # Add any other user-supplied functions for threading
             for func in self.additional_threads:

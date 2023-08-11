@@ -169,7 +169,7 @@ class MplViewer(ViewerBase):
         self.fig.set_facecolor(CONFIG['bgcolor'])
         self.fig.tight_layout()
 
-        # NOTE: on_stop() is called automatically by start() once matplotlib
+        # NOTE: stop() is called automatically by start() once matplotlib
         # window is destroyed. But if one wants more things to happen
         # upon figure closing, one can do something like:
         # self.fig.canvas.mpl_connect('close_event', self._on_close)
@@ -179,12 +179,7 @@ class MplViewer(ViewerBase):
 
     def _update(self, i=0):
         """Indicate what happens at each step of the matplotlib animation."""
-
-        if self.external_stop.is_set():
-            # NOTE: the internal stop setting is managed by self._on_stop,
-            # which is automatically called by self.start() in the end
-            plt.close(self.fig)
-
+        self._check_external_stop()
         to_be_animated = ()
         for window in self.windows:
             to_be_animated += window._update(i=i)
@@ -199,3 +194,7 @@ class MplViewer(ViewerBase):
                                  cache_frame_data=False)
         plt.show(block=True)
         return self.ani
+
+    def stop(self):
+        plt.close(self.fig)
+        super().stop()
