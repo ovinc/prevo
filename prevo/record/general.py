@@ -41,34 +41,33 @@ from ..misc import mode_to_names
 # ================================ MISC Tools ================================
 
 
-def try_thread(function):
-    """Decorator to make threaded functions return & print errors if errors occur"""
+def try_func(function):
+    """Decorator to make functions return & print errors if errors occur"""
     def wrapper(*args, **kwargs):
+
         try:
             function(*args, **kwargs)
+
         except Exception:
-            try:
-                name = kwargs['name']
-            except KeyError:
-                sensor_info = ''
-            else:
-                sensor_info = f' for sensor "{name}"'
             try:
                 nmax, _ = os.get_terminal_size()
             except OSError:
-                nmax = 80
+                nmax = 79
             print('\n')
             print('=' * nmax)
-            print(f'ERROR in {function.__name__}() {sensor_info}')
-            print('-' * nmax)
+            # args is normally the object (self), will print its repr
+            print(f'ERROR in {function.__name__}() for {args}')
             print_exc()
             print('=' * nmax)
             print('\n')
             return
+
     return wrapper
 
 
-# ========================== Sensor base classes =============================
+# ----------------------------------------------------------------------------
+# =============================== SENSOR CLASS ===============================
+# ----------------------------------------------------------------------------
 
 
 class SensorError(Exception):
@@ -132,7 +131,10 @@ class SensorBase(ABC):
             return data
 
 
-# =============== Default controlled properties for recordings ===============
+# ----------------------------------------------------------------------------
+# ============================= RECORDING CLASS ==============================
+# ----------------------------------------------------------------------------
+
 
 timer_ppty = ControlledProperty(attribute='interval',
                                 readable='Δt (s)',
@@ -142,24 +144,29 @@ active_ppty = ControlledProperty(attribute='active',
                                  readable='Rec. ON',
                                  commands=('on',))
 
-# ========================== Recording base class ============================
-
 
 class RecordingBase(ABC):
     """Base class for recording object used by RecordBase. To subclass"""
 
-    def __init__(self,
-                 Sensor,
-                 path='.',
-                 dt=1,
-                 ctrl_ppties=(),
-                 active=True,
-                 continuous=False,
-                 warnings=False,
-                 precise=False,
-                 immediate=True,
-                 programs=(),
-                 control_params=None):
+    # Warnings when queue size goes over some limits
+    queue_warning_limits = 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9
+
+    def __init__(
+        self,
+        Sensor,
+        path='.',
+        dt=1,
+        ctrl_ppties=(),
+        active=True,
+        continuous=False,
+        warnings=False,
+        precise=False,
+        immediate=True,
+        programs=(),
+        control_params=None,
+        dt_save=1.3,
+        dt_check=0.9,
+    ):
         """Init Recording object.
 
         Parameters
@@ -188,6 +195,9 @@ class RecordingBase(ABC):
                           to the program controls (e.g. dt, range_limits, etc.)
                           Note: if None, use default params
                           (see RecordingControl class)
+        - dt_save: how often (in seconds) queues are checked and written to files
+                   (it is also how often files are open/closed)
+        - dt_check: time interval (in seconds) for checking queue sizes.
         """
         self.Sensor = Sensor
         self.name = Sensor.name
@@ -196,9 +206,14 @@ class RecordingBase(ABC):
                                   warnings=warnings,
                                   precise=precise)
         self.immediate = immediate
-        self.path = Path(path)
 
-        self._active = active  # can be set to False to temporarily stop recording from sensor
+        self.path = Path(path)
+        self.path.mkdir(exist_ok=True)
+
+        self.dt_save = dt_save
+        self.dt_check = dt_check
+
+        self.active = active  # can be set to False to temporarily stop recording from sensor
         self.continuous = continuous
 
         # To be defined in subclass.
@@ -230,6 +245,20 @@ class RecordingBase(ABC):
         self._init_programs(programs=programs,
                             control_params=control_params)
 
+        # Queues in which data is put
+        self.queues = {
+            'saving': Queue(),
+            'plotting': Queue(),
+        }
+        # Events that need to be set to put data in each data queue
+        self.queue_events = {
+            'saving': Event(),
+            'plotting': Event(),
+        }
+
+        self.threads = []
+        self.internal_stop = Event()
+
     def __repr__(self):
         return f'{self.__class__.__name__} ({self.name})'
 
@@ -251,6 +280,20 @@ class RecordingBase(ABC):
     @interval.setter
     def interval(self, value):
         self.timer.set_interval(value, immediate=self.immediate)
+
+    def activate_queue(self, kind):
+        """Activate saving of data into chosen queue.
+
+        kind can be 'saving', 'plotting', etc.
+        """
+        self.queue_events[kind].set()
+
+    def deactivate_queue(self, kind):
+        """Dectivate saving of data into chosen queue.
+
+        kind can be 'saving', 'plotting', etc.
+        """
+        self.queue_events[kind].clear()
 
     # Private methods --------------------------------------------------------
 
@@ -346,26 +389,255 @@ class RecordingBase(ABC):
         elif status == 'resumed':
             print(f'{self.name} reading resumed ({t_str}).')
 
-    def on_stop(self):
-        """What happens when a stop event is requested in the CLI"""
+    # ======================= Data reading from sensor =======================
+
+    @try_func
+    def data_read(self):
+        """Read data from sensor and store it in data queues."""
+
+        # Can be done here because if recording not active, the loop does not
+        # put measurements in any queue anyway.
+        self.activate_queue('saving')
+
+        failed_reading = False  # True temporarily if reading fails
+
+        # Without this here, the first data points are irregularly spaced.
+        self.timer.reset()
+
+        while not self.internal_stop.is_set():
+
+            if not self.active:
+                if not self.continuous:
+                    # to avoid checking too frequently if active or not.
+                    self.timer.checkpt()
+                continue
+
+            try:
+                data = self.sensor.read()
+
+            # Measurement has failed .........................................
+            except SensorError:
+                if not failed_reading:  # means it has not failed just before
+                    self.print_info_on_failed_reading('failed')
+                failed_reading = True
+
+            # Measurement is OK ..............................................
+            else:
+                if failed_reading:      # means it has failed just before
+                    self.print_info_on_failed_reading('resumed')
+                    failed_reading = False
+
+                measurement = self.format_measurement(data)
+                self.after_measurement()
+
+                for queue, event in zip(self.queues.values(), self.queue_events.values()):
+                    if event.is_set():
+                        queue.put(measurement)
+
+            # Below, this means that one does not try to acquire data right
+            # away after a fail, but one waits for the usual time interval
+            finally:
+                if not self.continuous:
+                    self.timer.checkpt()
+
+    # ========================== Write data to file ==========================
+
+    def _try_save(self, measurement, file, attempts=3):
+        """Try saving data. If not, ignore"""
+        error = False
+        for attempt in range(attempts):
+            try:
+                self.save(measurement, file)
+            except Exception as e:
+                error = True
+                print(f'Error saving {measurement} for {self.name}: {e}. '
+                      f'Attempt {attempt + 1}/{attempts}')
+            else:
+                if error:
+                    print(f'Success saving {measurement} for {self.name} '
+                          f'at attempt {attempt + 1}')
+                return
+        else:
+            print(f'Impossible saving {measurement} for {self.name}; '
+                  'will be missing from data')
+
+    @try_func
+    def data_save(self):
+        """Save data that is stored in a queue by data_read."""
+
+        saving_queue = self.queues['saving']
+        saving_timer = oclock.Timer(interval=self.dt_save)
+
+        self.file_manager.init_file()
+
+        while not self.internal_stop.is_set():
+
+            # Open and close file at each cycle to be able to save periodically
+            # and for other users/programs to access the data simultaneously
+            with open(self.file_manager.file, 'a', encoding='utf8') as file:
+
+                while not saving_timer.interval_exceeded:
+
+                    try:
+                        measurement = saving_queue.get(timeout=self.dt_save)
+                    except Empty:
+                        pass
+                    else:
+                        if measurement is not None:
+                            self._try_save(measurement, file)
+
+                    if self.internal_stop.is_set():  # Move to buffering waitbar
+                        break
+
+                # periodic check whether there is data to save
+                saving_timer.checkpt()
+
+        # Buffering waitbar --------------------------------------------------
+
+        if not saving_queue.qsize():
+            return
+
+        print(f'Data buffer saving started for {self.name}')
+
+        # The nested statements below, similarly to above, ensure that
+        # self.file_manager.file is opened and closed regularly to avoid
+        # loosing too much data if there is an error.
+
+        with tqdm(total=saving_queue.qsize()) as pbar:
+            while True:
+                try:
+                    with open(self.file_manager.file, 'a', encoding='utf8') as file:
+                        saving_timer.reset()
+                        while not saving_timer.interval_exceeded:
+                            measurement = saving_queue.get(timeout=self.dt_save)
+                            self._try_save(measurement, file)
+                            pbar.update()
+                except Empty:
+                    break
+
+        print(f'Data buffer saving finished for {self.name}')
+
+    # ========================== Check queue sizes ===========================
+
+    def _check_queue_size(self, queue, q_size_over, q_type):
+        """Check that queue does not go beyond specified limits"""
+        for qmax in self.queue_warning_limits:
+
+            if queue.qsize() > qmax:
+                if not q_size_over[qmax]:
+                    print(f'\nWARNING: {q_type} buffer size for {self.name}'
+                          f'over {int(qmax)} elements')
+                    q_size_over[qmax] = True
+
+            if queue.qsize() <= qmax:
+                if q_size_over[qmax]:
+                    print(f'\n{q_type} buffer size now below {int(qmax)}'
+                          f'for {self.name}')
+                    q_size_over[qmax] = False
+
+    @try_func
+    def check_queue_sizes(self):
+        """Periodically verify that queue sizes are not over limits"""
+
+        # Init queue warnings ------------------------------------------------
+
+        lims = self.queue_warning_limits
+
+        self.q_size_over = {}
+        for queue_name in self.queues:
+            self.q_size_over[queue_name] = {limit: False for limit in lims}
+
+        # Check periodically -------------------------------------------------
+
+        while not self.internal_stop.is_set():
+
+            for queue_name, queue in self.queues.items():
+
+                # No need to check if queue is not active
+                if self.queue_events[queue_name].is_set():
+
+                    self._check_queue_size(
+                        queue=queue,
+                        q_size_over=self.q_size_over[queue_name],
+                        q_type=queue_name,
+                    )
+
+            self.internal_stop.wait(self.dt_check)
+
+    # ====================== Start / stop recording ==========================
+
+    def _apply_ppties(self, **ppty_kwargs):
+        # Note: (_set_property() does not do anything if the property
+        # does not exist for the recording of interest)
+        for ppty_cmd, value in ppty_kwargs.items():
+            ppty = self.ppty_commands[ppty_cmd]
+            self._set_property(ppty=ppty, value=value)
+
+    def _start_programs(self):
+        """Optional pre-defined program for change of recording properties"""
+        for program in self.programs:
+            program.run()
+
+    def start(self, **ppty_kwargs):
+        """Start recording (nonblocking)"""
+
+        # To be able to restart the recording after calling stop()
+        self.internal_stop.clear()
+
+        try:
+            with self.Sensor() as self.sensor:
+
+                # Initial setting of properties is done here in case one of the
+                # properties acts on the sensor object, which is not defined
+                # before this point.
+                self._apply_ppties(**ppty_kwargs)
+                self._start_programs()
+
+                read_thread = Thread(target=self.data_read)
+                read_thread.start()
+
+            save_thread = Thread(target=self.data_save)
+            save_thread.start()
+
+            qcheck_thread = Thread(target=self.check_queue_sizes)
+            qcheck_thread.start()
+
+            # This is to be able to join threads in other programs using
+            # the recording (i.e. wait for recording to finish)
+            self.threads.extend([read_thread, save_thread, qcheck_thread])
+
+        # Typically an exception will be thrown only by the with statement
+        # or ppties and programs, because the threads are in try_func decorator
+        except (Exception, KeyboardInterrupt):
+            print(f'Error for {self.name}. Stopping recording.')
+            print_exc()
+            self.stop()
+
+    def stop(self):
+        self.internal_stop.set()
         self.timer.stop()
         self._stop_programs()
 
+    @property
+    def running(self):
+        return not self.internal_stop.is_set()
+
+
+# ----------------------------------------------------------------------------
+# =============================== RECORD CLASS ===============================
+# ----------------------------------------------------------------------------
+
+
 class RecordBase:
-    """Asynchronous recording of several Recordings object.
+    """Asynchronous recording of several Recordings objects.
 
-    Recordings objects are of type RecordingBase."""
-
-    # Warnings when queue size goes over some limits
-    queue_warning_limits = 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9
+    Recordings objects are of type RecordingBase or subclasses."""
 
     def __init__(self,
                  recordings,
                  path='.',
                  on_start=(),
-                 dt_save=1.9,
-                 dt_request=0.7,
-                 dt_check=1.3):
+                 dt_request=0.7):
         """Init base class for recording data
 
         Parameters
@@ -376,32 +648,25 @@ class RecordBase:
                     method, that need to be started at the same time as
                     Record.start().
                     Note: for now, start() and run() need to be non-blocking.
-        - dt_save: how often (in seconds) queues are checked and written to files
-                   (it is also how often files are open/closed)
         - dt_request: time interval (in seconds) for checking user requests
                       (e.g. graph pop-up)
-        - dt_check: time interval (in seconds) for checking queue sizes.
         """
         self.recordings = {rec.name: rec for rec in recordings}
         self.create_events()
 
         self.path = Path(path)
         self.path.mkdir(exist_ok=True)
+
         self.on_start = on_start
 
-        self.dt_save = dt_save
         self.dt_request = dt_request
-        self.dt_check = dt_check
-
-        # Data is stored in a queue before being saved
-        self.q_save = {name: Queue() for name in self.recordings}
-
-        # Data queue for plotting when required
-        self.q_plot = {name: Queue() for name in self.recordings}
 
         # Any additional functions that need to be run along the other threads
         # (to be defined in subclasses)
         self.additional_threads = []
+
+    def __repr__(self):
+        return f'Record object ({self.__class__.__name__})'
 
     # =========== Optional methods and attributes for subclassing ============
 
@@ -434,9 +699,7 @@ class RecordBase:
                 success = True
         return new_file
 
-    # ------------------------------------------------------------------------
     # ============================= INIT METHODS =============================
-    # ------------------------------------------------------------------------
 
     def create_events(self):
         """Create event objects managed by the CLI"""
@@ -451,7 +714,7 @@ class RecordBase:
                                      readable='stop',
                                      commands=('q', 'Q', 'quit'))
 
-        self.events = graph_event, stop_event
+        self.controlled_events = graph_event, stop_event
 
     def parse_initial_user_commands(self, ppty_kwargs):
         """Check if user input contains specific properties.
@@ -462,7 +725,7 @@ class RecordBase:
         If generic input (e.g. 'dt=10'), set all recordings to that value
         If specific input (e.g. dt_P=10), update recording to that value
         """
-        self.initial_ppty_settings = {name: {} for name in self.recordings}
+        initial_ppty_settings = {name: {} for name in self.recordings}
 
         global_commands = {}
         specific_commands = {}
@@ -477,28 +740,16 @@ class RecordBase:
 
         # Apply first global values to all recordings ------------------------
         for ppty_cmd, value in global_commands.items():
-            for name, recording in self.recordings.items():
-                ppty = recording.ppty_commands[ppty_cmd]
-                self.initial_ppty_settings[name][ppty] = value
+            for name, in self.recordings:
+                initial_ppty_settings[name][ppty_cmd] = value
 
         # Then apply commands to specific recordings if specified ------------
         for name, (ppty_cmd, value) in specific_commands.items():
-            ppty = self.recordings[name].ppty_commands[ppty_cmd]
-            self.initial_ppty_settings[name][ppty] = value
+            initial_ppty_settings[name][ppty_cmd] = value
 
-    # ------------------------------------------------------------------------
+        return initial_ppty_settings
+
     # =================== START RECORDING (MULTITHREAD) ======================
-    # ------------------------------------------------------------------------
-
-    def add_named_threads(self, function):
-        for name in self.recordings:
-            kwargs = {'name': name}
-            self.threads.append(Thread(target=function, kwargs=kwargs))
-
-    def add_other_threads(self):
-        """Add other threads for additional functions defined by user."""
-        for func in self.additional_threads:
-            self.threads.append(Thread(target=func))
 
     def start_supplied_objects(self):
         """Start user-supplied non-blocking objects with a start() or run() method."""
@@ -523,26 +774,27 @@ class RecordBase:
                      (example dt=10 for changing all time intervals to 10
                       or dt_P=60 to change only time interval of recording 'P')
         """
-        # Check if user inputs particular initial settings for recordings
-        self.parse_initial_user_commands(ppty_kwargs)
-
-        self.save_metadata()
-
         print(f'Recording started in folder {self.path.resolve()}')
 
         error_occurred = False
+        self.threads = []
 
         try:
 
-            self.threads = []
+            # Check if user inputs particular initial settings for recordings
+            init_ppties = self.parse_initial_user_commands(ppty_kwargs)
 
-            self.add_named_threads(self.data_read)
-            self.add_named_threads(self.data_save)
-            self.threads.append(Thread(target=self.check_queue_sizes))
-            self.add_other_threads()
+            # Start each recording with these initial settings
+            for name, recording in self.recordings.items():
+                recording.start(**init_ppties[name])
 
-            for thread in self.threads:
+            self.save_metadata()
+
+            # Add any other user-supplied functions for threading
+            for func in self.additional_threads:
+                thread = Thread(target=func)
                 thread.start()
+                self.threads.append(thread)
 
             # Add CLI. This one is a bit particular because it is blocking
             # with input() and has to be manually stopped. ----------------
@@ -556,9 +808,9 @@ class RecordBase:
             # GUI backend problems if not) --------------------------------
             self.data_graph()
 
-        except Exception as e:
+        except Exception:
             error_occurred = True
-            print(f'\nERROR during recording: {e}. \n Stopping ... \n')
+            print('\nERROR during asynchronous Record. \n Stopping ... \n')
             print_exc()
 
         except KeyboardInterrupt:
@@ -567,7 +819,11 @@ class RecordBase:
 
         finally:
 
-            self.internal_stop.set()
+            self.stop()
+            for recording in self.recordings.values():
+                recording.stop()
+                for thread in recording.threads:
+                    thread.join()
 
             for thread in self.threads:
                 thread.join()
@@ -575,243 +831,54 @@ class RecordBase:
             for obj in self.on_start:
                 obj.stop()
 
-            if error_occurred:
-                print('\nIMPORTANT: CLI still running. Input "q" to stop.\n')
-
-            self.cli_thread.join()
+            try:
+                self.cli_thread
+            except AttributeError:  # CLI thread not defined
+                pass
+            else:
+                if error_occurred:
+                    print('\nIMPORTANT: CLI still running. Input "q" to stop.\n')
+                self.cli_thread.join()
 
             print('Recording Stopped')
 
-    # ------------------------------------------------------------------------
+    def stop(self):
+        self.internal_stop.set()
+
     # =============================== Threads ================================
-    # -------------------- (CLI is defined elsewhere) ------------------------
 
-    # =========================== Data acquisition ===========================
-
-    @try_thread
+    @try_func
     def cli(self):
         if self.recordings:  # if no recordings provided, no need to record.
-            command_input = CommandLineInterface(self.recordings, self.events)
+            command_input = CommandLineInterface(
+                self.recordings,
+                self.controlled_events,
+            )
             command_input.run()
         else:
             self.internal_stop.set()
             raise ValueError('No recordings provided. Stopping ...')
 
-    @try_thread
-    def data_read(self, name):
-        """Read data from sensor and store it in data queues."""
-
-        # Init ---------------------------------------------------------------
-
-        recording = self.recordings[name]
-        saving_queue = self.q_save[name]
-        plotting_queue = self.q_plot[name]
-        failed_reading = False  # True temporarily if P or T reading fails
-
-        # Recording loop -----------------------------------------------------
-
-        with recording.Sensor() as sensor:
-
-            recording.sensor = sensor
-
-            # Initial setting of properties is done here in case one of the
-            # properties acts on the sensor object, which is not defined
-            # before this point.
-            # Note: (_set_property() does not do anything if the property
-            # does not exist for the recording of interest)
-            for ppty, value in self.initial_ppty_settings[name].items():
-                recording._set_property(ppty=ppty, value=value)
-
-            # Optional pre-defined program for change of recording properties
-            for program in recording.programs:
-                program.run()
-
-            # Without this here, the first data points are irregularly spaced.
-            recording.timer.reset()
-
-            while not self.internal_stop.is_set():
-
-                if not recording.active:
-                    if not recording.continuous:
-                        # to avoid checking too frequently if active or not.
-                        recording.timer.checkpt()
-                    continue
-
-                try:
-                    data = sensor.read()
-
-                # Measurement has failed .........................................
-                except SensorError:
-                    if not failed_reading:  # means it has not failed just before
-                        recording.print_info_on_failed_reading('failed')
-                    failed_reading = True
-
-                # Measurement is OK ..............................................
-                else:
-                    if failed_reading:      # means it has failed just before
-                        recording.print_info_on_failed_reading('resumed')
-                        failed_reading = False
-
-                    measurement = recording.format_measurement(data)
-                    recording.after_measurement()
-
-                    # Store recorded data in a first queue for saving to file
-                    saving_queue.put(measurement)
-
-                    # Store recorded data in another queue for plotting
-                    if self.graph_request.is_set():
-                        plotting_queue.put(measurement)
-
-                # Below, this means that one does not try to acquire data right
-                # away after a fail, but one waits for the usual time interval
-                finally:
-                    if not recording.continuous:
-                        recording.timer.checkpt()
-
-            else:
-                recording.on_stop()
-
-    # ========================== Write data to file ==========================
-
-    @staticmethod
-    def _try_save(measurement, recording, file, attempts=3):
-        """Try saving data. If not, ignore"""
-        error = False
-        for attempt in range(attempts):
-            try:
-                recording.save(measurement, file)
-            except Exception as e:
-                error = True
-                print(f'Error saving {measurement} for {recording.name}: {e}. '
-                      f'Attempt {attempt + 1}/{attempts}')
-            else:
-                if error:
-                    print(f'Success saving {measurement} for {recording.name} '
-                          f'at attempt {attempt + 1}')
-                return
-        else:
-            print(f'Impossible saving {measurement} for {recording.name}; '
-                  'will be missing from data')
-
-
-    @try_thread
-    def data_save(self, name):
-        """Save data that is stored in a queue by data_read."""
-
-        recording = self.recordings[name]
-        saving_queue = self.q_save[name]
-        saving_timer = oclock.Timer(interval=self.dt_save)
-
-        recording.file_manager.init_file()
-
-        while not self.internal_stop.is_set():
-
-            # Open and close file at each cycle to be able to save periodically
-            # and for other users/programs to access the data simultaneously
-            with open(recording.file_manager.file, 'a', encoding='utf8') as file:
-
-                while not saving_timer.interval_exceeded:
-
-                    try:
-                        measurement = saving_queue.get(timeout=self.dt_save)
-                    except Empty:
-                        pass
-                    else:
-                        if measurement is not None:
-                            self._try_save(measurement, recording, file)
-
-                    if self.internal_stop.is_set():  # Move to buffering waitbar
-                        break
-
-                # periodic check whether there is data to save
-                saving_timer.checkpt()
-
-        # Buffering waitbar --------------------------------------------------
-
-        if not saving_queue.qsize():
-            return
-
-        print(f'Data buffer saving started for {name}')
-
-        # The nested statements below, similarly to above, ensure that
-        # recording.file_manager.file is opened and closed regularly to avoid
-        # loosing too much data if there is an error.
-
-        with tqdm(total=saving_queue.qsize()) as pbar:
-            while True:
-                try:
-                    with open(recording.file_manager.file, 'a', encoding='utf8') as file:
-                        saving_timer.reset()
-                        while not saving_timer.interval_exceeded:
-                            measurement = saving_queue.get(timeout=self.dt_save)
-                            self._try_save(measurement, recording, file)
-                            pbar.update()
-                except Empty:
-                    break
-
-        print(f'Data buffer saving finished for {name}')
-
-    # =========================== Real-time graph ============================
-
+    @try_func
     def data_graph(self):
         """Manage requests of real-time plotting of data during recording."""
 
         while not self.internal_stop.is_set():
 
             if self.graph_request.is_set():
-                self.data_plot()
+
+                for recording in self.recordings.values():
+                    recording.activate_queue('plotting')
+
+                self.data_plot()  # Blocking (defined in subclasses)
+
                 self.graph_request.clear()
+                for recording in self.recordings.values():
+                    recording.deactivate_queue('plotting')
 
-            self.internal_stop.wait(self.dt_request)  # check whether there is a graph request
+            self.internal_stop.wait(self.dt_request)
 
-    # ========================== Check queue sizes ===========================
-
-    def _init_queue_size_info(self):
-        """Create dict indicating that no queue limit is over among limits"""
-        queue_size_over = {}
-        for name in self.recordings:
-            queue_size_over[name] = {limit: False
-                                     for limit in self.queue_warning_limits}
-        return queue_size_over
-
-    def _check_queue_size(self, name, q, q_size_over, q_type):
-        """Check that queue does not go beyond specified limits"""
-        for qmax in self.queue_warning_limits:
-
-            if q.qsize() > qmax:
-                if not q_size_over[qmax]:
-                    print(f'\nWARNING: {q_type} buffer size for {name} over {qmax} elements')
-                    q_size_over[qmax] = True
-
-            if q.qsize() <= qmax:
-                if q_size_over[qmax]:
-                    print(f'\n{q_type} buffer size now below {qmax} for {name}')
-                    q_size_over[qmax] = False
-
-    @try_thread
-    def check_queue_sizes(self):
-        """Periodically verify that queue sizes are not over limits"""
-
-        self.q_save_size_over = self._init_queue_size_info()
-        self.q_plot_size_over = self._init_queue_size_info()
-
-        while not self.internal_stop.is_set():
-
-            for name in self.recordings:
-
-                self._check_queue_size(name=name,
-                                       q=self.q_save[name],
-                                       q_size_over=self.q_save_size_over[name],
-                                       q_type='Saving')
-
-                if self.graph_request.is_set():
-
-                    self._check_queue_size(name=name,
-                                           q=self.q_save[name],
-                                           q_size_over=self.q_save_size_over[name],
-                                           q_type='Plotting')
-
-            self.internal_stop.wait(self.dt_check)
+    # ============================ Factory method ============================
 
     @classmethod
     def create(cls,
@@ -822,6 +889,8 @@ class RecordBase:
                recording_kwargs=None,
                programs=None,
                control_params=None,
+               dt_save=1.3,
+               dt_check=0.9,
                path='.',
                **kwargs):
         """Factory method to generate a Record object from sensor names etc.
@@ -845,8 +914,12 @@ class RecordBase:
                           to the program controls (e.g. dt, range_limits, etc.)
                           Note: if None, use default params
                           (see RecordingControl class)
+        - dt_save: how often (in seconds) queues are checked and written to files
+                   (it is also how often files are open/closed)
+        - dt_check: time interval (in seconds) for checking queue sizes.
+        - path: directory in which data is recorded.
         - **kwargs is any keyword arguments to pass to Record __init__
-          (including dt_save, ppty_kwargs etc.)
+          (only possible options: on_start and dt_request)
         """
         all_sensors = {Sensor.name: Sensor for Sensor in sensors}
         name_info = {'possible_names': all_sensors,

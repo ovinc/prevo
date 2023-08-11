@@ -102,6 +102,9 @@ class ImageRecording(RecordingBase):
                           to the program controls (e.g. dt, range_limits, etc.)
                           Note: if None, use default params
                           (see RecordingControl class)
+        - dt_save: how often (in seconds) queues are checked and written to files
+                   (it is also how often files are open/closed)
+        - dt_check: time interval (in seconds) for checking queue sizes.
         """
         super().__init__(Sensor=Sensor, path=path, **kwargs)
 
@@ -210,11 +213,8 @@ class ImageRecord(RecordBase):
                     method, that need to be started at the same time as
                     Record.start().
                     Note: for now, start() and run() need to be non-blocking.
-        - dt_save: how often (in seconds) queues are checked and written to files
-                   (it is also how often files are open/closed)
         - dt_request: time interval (in seconds) for checking user requests
                       (e.g. graph pop-up)
-        - dt_check: time interval (in seconds) for checking queue sizes.
         """
         super().__init__(recordings=recordings, **kwargs)
         self.metadata_filename = metadata_filename
@@ -274,8 +274,8 @@ class ImageRecord(RecordBase):
         Window = Windows[self.viewer]
 
         windows = []
-        for name in self.image_recordings:
-            image_queue = self.q_plot[name]
+        for name, recording in self.image_recordings.items():
+            image_queue = recording.queues['plotting']
             win = Window(image_queue, name=name, show_num=True, show_fps=True)
             windows.append(win)
 

@@ -74,6 +74,9 @@ class NumericalRecording(RecordingBase):
                           to the program controls (e.g. dt, range_limits, etc.)
                           Note: if None, use default params
                           (see RecordingControl class)
+        - dt_save: how often (in seconds) queues are checked and written to files
+                   (it is also how often files are open/closed)
+        - dt_check: time interval (in seconds) for checking queue sizes.
         """
         super().__init__(Sensor=Sensor, path=path, **kwargs)
 
@@ -165,11 +168,8 @@ class NumericalRecord(RecordBase):
                     method, that need to be started at the same time as
                     Record.start().
                     Note: for now, start() and run() need to be non-blocking.
-        - dt_save: how often (in seconds) queues are checked and written to files
-                   (it is also how often files are open/closed)
         - dt_request: time interval (in seconds) for checking user requests
                       (e.g. graph pop-up)
-        - dt_check: time interval (in seconds) for checking queue sizes.
         """
         super().__init__(recordings=recordings, **kwargs)
         self.metadata_filename = metadata_filename
@@ -226,8 +226,10 @@ class NumericalRecord(RecordBase):
 
         # In case the queue contains other measurements than numerical
         # (e.g. images from cameras)
-        numerical_queue = {name: self.q_plot[name]
-                           for name in self.numerical_recordings}
+        numerical_queue = {
+            name: recording.queues['plotting']
+            for name, recording in self.numerical_recordings.items()
+        }
 
         graph.run(q_plot=numerical_queue,
                   external_stop=self.internal_stop,
