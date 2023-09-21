@@ -23,11 +23,13 @@
 
 from abc import ABC, abstractmethod
 import time
-from queue import Queue, Empty
+from queue import Queue
 from threading import Thread, Event
 from traceback import print_exc
 
 import numpy as np
+
+from ..misc import get_all_from_queue, get_last_from_queue
 
 
 # ========================== Appearance Parameters  ==========================
@@ -48,34 +50,6 @@ DISPOSITIONS = {1: (1, 1),
 
 
 # =============================== MISC. Tools ================================
-
-
-def get_last_from_queue(queue):
-    """Function to empty queue to get last element from it.
-
-    Return None if queue is initially empty, return last element otherwise.
-    """
-    element = None
-    while True:
-        try:
-            element = queue.get(timeout=0)
-        except Empty:
-            break
-    return element
-
-
-def get_all_from_queue(queue):
-    """Function to empty queue to get all elements from it as a list
-
-    Return None if queue is initially empty, return last element otherwise.
-    """
-    elements = []
-    while True:
-        try:
-            elements.append(queue.get(timeout=0))
-        except Empty:
-            break
-    return elements
 
 
 def max_possible_pixel_value(img):

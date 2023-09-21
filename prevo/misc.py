@@ -22,12 +22,44 @@
 import time
 from threading import Thread
 from random import random
-from queue import Queue
+from queue import Queue, Empty
 from statistics import mean
 from pathlib import Path
 
 import oclock
 import numpy as np
+
+
+# ============================ Misc. queue management ========================
+
+
+def get_last_from_queue(queue):
+    """Function to empty queue to get last element from it.
+
+    Return None if queue is initially empty, return last element otherwise.
+    """
+    element = None
+    while True:
+        try:
+            element = queue.get(timeout=0)
+        except Empty:
+            break
+    return element
+
+
+def get_all_from_queue(queue):
+    """Function to empty queue to get all elements from it as a list
+
+    Return None if queue is initially empty, return last element otherwise.
+    """
+    elements = []
+    while True:
+        try:
+            elements.append(queue.get(timeout=0))
+        except Empty:
+            break
+    return elements
+
 
 # ========================== Misc. file management ===========================
 

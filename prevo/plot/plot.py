@@ -21,56 +21,24 @@
 
 
 # Standard library imports
-from datetime import datetime
 from threading import Event, Thread
 from queue import Queue
 from pathlib import Path
 
-# Non standard imports
-import tzlocal
-import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import oclock
 
-from .general import NumericalGraphBase, UpdateGraphBase, DISPOSITIONS
+from .general import GraphBase, MeasurementFormatter
+from .general import DISPOSITIONS, local_timezone
 from ..record import SensorError
-
-# The two lines below have been added following a console FutureWarning:
-# "Using an implicitly registered datetime converter for a matplotlib plotting
-# method. The converter was registered by pandas on import. Future versions of
-# pandas will require you to explicitly register matplotlib converters."
-try:
-    import pandas as pd
-    from pandas.plotting import register_matplotlib_converters
-    register_matplotlib_converters()
-except ModuleNotFoundError:
-    pandas_available = False
-else:
-    pandas_available = True
-
-
-# Misc =======================================================================
-
-
-local_timezone = tzlocal.get_localzone()
 
 
 # =============================== Main classes ===============================
 
 
-class UpdateGraph(UpdateGraphBase):
-
-    def _manage_data(self, data):
-        self.graph.update_current_data(data)
-
-    def after_getting_measurements(self):
-        self.graph.update_lines()
-        self.graph.update_time_formatting()
-
-
-class NumericalGraph(NumericalGraphBase):
+class NumericalGraph(GraphBase):
 
     def __init__(self,
                  names,
@@ -81,7 +49,8 @@ class NumericalGraph(NumericalGraphBase):
                  linestyles=None,
                  linestyle='.',
                  data_as_array=False,
-                 time_conversion='numpy'):
+                 time_conversion='numpy',
+                 measurement_formatter=MeasurementFormatter()):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
@@ -109,9 +78,8 @@ class NumericalGraph(NumericalGraphBase):
                          bool as True (default False)
         - time_conversion: how to convert from unix time to datetime for arrays;
                            possible values: 'numpy', 'pandas'.
+        - measurement_formatter: MeasurementFormatter (or subclass) object.
         """
-        self.timezone = local_timezone
-
         super().__init__(names=names,
                          data_types=data_types,
                          fig=fig,
@@ -119,20 +87,11 @@ class NumericalGraph(NumericalGraphBase):
                          legends=legends,
                          linestyles=linestyles,
                          linestyle=linestyle,
-                         data_as_array=data_as_array)
+                         data_as_array=data_as_array,
+                         time_conversion=time_conversion,
+                         measurement_formatter=measurement_formatter)
 
-        time_converters = {'datetime': self._to_datetime_datetime,
-                           'numpy': self._to_datetime_numpy,
-                           'pandas': self._to_datetime_pandas}
-
-        self.time_converters = {}
-        for name in self.names:
-            if self.data_as_array[name]:
-                self.time_converters[name] = time_converters[time_conversion]
-            else:
-                self.time_converters[name] = time_converters['datetime']
-
-        self.current_data = self.create_empty_data()  # For live updates
+    # ================== Methods subclassed from GraphBase ===================
 
     def create_axes(self):
         """Generate figure/axes as a function of input data types"""
@@ -159,110 +118,35 @@ class NumericalGraph(NumericalGraphBase):
             self.axs[datatype] = ax
 
     def format_graph(self):
-        """Set colors, time formatting, etc."""
-
-        # Concise formatting of time -----------------------------------------
-
-        self.locator = {}
+        """Misc. settings for graph (time formatting, limits etc.)"""
+        self.locator = {}  # For concise formatting of time -----------------------------------------
         self.formatter = {}
-
         for ax in self.axs.values():
-            self.locator[ax] = mdates.AutoDateLocator(tz=self.timezone)
+            self.locator[ax] = mdates.AutoDateLocator(tz=local_timezone)
             self.formatter[ax] = mdates.ConciseDateFormatter(self.locator,
-                                                             tz=self.timezone)
+                                                             tz=local_timezone)
 
-        # Create line objects for every sensor channel -----------------------
-        self.create_lines()
+    def update_data(self, data):
+        """Store measurement time and values in active data lists."""
+
+        name = data['name']
+        values = data['values']
+        time = self.time_converters[name](data['time (unix)'])
+
+        self.current_data[name]['times'].append(time)
+        for i, value in enumerate(values):
+            self.current_data[name]['values'][i].append(value)
+
+    def update(self):
+        self.update_lines()
+        self.update_time_formatting()
 
     @property
     def animated_artists(self):
         return self.lines_list
 
-    # ============================= Main methods =============================
+    # ======================== Local update methods ==========================
 
-    def _to_datetime_datetime(self, unix_time):
-        """Transform single value of unix time into timezone-aware datetime."""
-        return datetime.fromtimestamp(unix_time, self.timezone)
-
-    @staticmethod
-    def _to_datetime_numpy(unix_times):
-        """Transform iterable / array of unix times into datetimes.
-
-        Note: this is the fastest method, but the datetimes are in UTC format
-              (not local time)
-        """
-        return (np.array(unix_times) * 1e9).astype('datetime64[ns]')
-
-    def _to_datetime_pandas(self, unix_times):
-        """Transform iterable / array of datetimes into pandas Series.
-
-        Note: here, the datetimes are in local timezone format, but this is
-              slower than the numpy approach.
-        """
-        # For some reason, it's faster (and more precise) to convert to numpy first
-        np_times = (np.array(unix_times) * 1e9).astype('datetime64[ns]')
-        pd_times = pd.Series(np_times)
-        return pd.to_datetime(pd_times, utc=True).dt.tz_convert(self.timezone)
-
-    def format_measurement(self, measurement):
-        """Transform measurement from the queue into something usable by manage_data()
-
-        Can be subclassed to adapt to various applications.
-        Here, assumes data is incoming in the form of a dictionary with at
-        least keys:
-        - 'name' (str, identifier of sensor)
-        - 'time (unix)' (floar or array of floats)
-        - 'values' (iterable of values, or iterable of arrays of values)
-
-        Subclass to adapt to applications.
-        """
-        data = {key: measurement[key] for key in ('name', 'values')}
-
-        name = measurement['name']
-        t_unix = measurement['time (unix)']
-
-        data['time'] = self.time_converters[name](t_unix)
-
-        return data
-
-    # For static plots -------------------------------------------------------
-
-    def _plot(self, data):
-        """Generic plot method for static data.
-
-        data is a dict obtained from format_measurement(measurement)
-        where measurement is an object from the data queue.
-        """
-        name = data['name']
-        values = data['values']
-        time = data['time']
-
-        dtypes = self.data_types[name]  # all data types for this specific signal
-        clrs = self.colors[name]
-
-        for value, dtype, clr in zip(values, dtypes, clrs):
-            ax = self.axs[dtype]  # plot data in correct axis depending on type
-            ax.plot(time, value, self.linestyle, color=clr)
-
-        # Use Concise Date Formatting for minimal space used on screen by time
-        different_types = set(dtypes)
-        for dtype in different_types:
-            ax = self.axs[dtype]
-            ax.xaxis.set_major_locator(self.locator[ax])
-            ax.xaxis.set_major_formatter(self.formatter[ax])
-
-    # For updated plots ------------------------------------------------------
-
-    def update_current_data(self, data):
-        """Store measurement time and values in active data lists."""
-
-        name = data['name']
-        values = data['values']
-        time = data['time']
-
-        self.current_data[name]['times'].append(time)
-        for i, value in enumerate(values):
-            self.current_data[name]['values'][i].append(value)
 
     def update_lines(self):
         """Update line positions with current data."""
@@ -291,28 +175,6 @@ class NumericalGraph(NumericalGraphBase):
             ax.relim()
             ax.autoscale_view(tight=True, scalex=True, scaley=True)
 
-    def run(self,
-            q_plot,
-            external_stop=None,
-            dt_graph=0.1,
-            blit=False):
-        """Run live view of plot with data from queues.
-
-        (Convenience method to instantiate a UpdateGraph object)
-
-        Parameters
-        ----------
-        - q_plot: dict {name: queue} with sensor names and data queues
-        - external_stop (optional): external stop request, closes the figure if set
-        - dt graph: time interval to update the graph
-        - blit: if True, use blitting to speed up the matplotlib animation
-        """
-        update_plot = UpdateGraph(graph=self,
-                                  q_plot=q_plot,
-                                  external_stop=external_stop,
-                                  dt_graph=dt_graph,
-                                  blit=blit)
-        update_plot.run()
 
 
 # ============== Classes using Graph-like objects to plot data ===============
@@ -392,7 +254,7 @@ class PlotUpdatedData:
         for name in self.names:
             Thread(target=self.get_data, args=(name,)).start()
 
-        self.graph.run(q_plot=self.queues,
+        self.graph.run(queues=self.queues,
                        external_stop=self.internal_stop,
                        dt_graph=self.dt_graph)
 
@@ -430,6 +292,8 @@ class PlotLiveSensors(PlotUpdatedData):
                     recording.after_measurement()
                     self.queues[name].put(measurement)
                     self.timer.checkpt()
+            else:
+                print('WHILE LOOP STOPPED')
 
 
 class PlotSavedDataUpdated(PlotUpdatedData, PlotSavedData):

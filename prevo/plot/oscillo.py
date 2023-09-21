@@ -28,43 +28,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Local imports
-from .general import NumericalGraphBase, UpdateGraphBase
+from .general import GraphBase, MeasurementFormatter
 
 
-class UpdateGraph(UpdateGraphBase):
+class OscilloMeasurementFormatter(MeasurementFormatter):
+    """Overwrite some formatting methods from the default."""
 
-    def _manage_data(self, data):
+    def list_of_single_values_to_array(self, datalist):
+        """To be able to filter on condition and concatenate"""
+        return np.array(datalist, dtype=np.float64)
 
-        tmin, tmax = self.graph.get_time_boundaries(data)
-
-        if self.graph.reference_time is None:
-            self.graph.reference_time = tmin   # Take time of 1st data as time 0
-
-        self.graph.update_stored_data(data=data,
-                                      stored_data=self.graph.current_data)
-
-        # In case measurement arrives late after window has already refreshed,
-        # duplicate it to previous data so that it is remains visible
-        # This is particularly useful for data arriving as arrays; in which
-        # case the array will be duplicated to appear both at the beginning
-        # and end of the window when the times in the arrays span values
-        # across the window wrapping time.
-        if tmin < self.graph.reference_time:
-            self.graph.update_stored_data(data=data,
-                                          stored_data=self.graph.previous_data)
-
-        # There is no need to do the same for 'future' points that would arrive
-        # with tmax > reference_time + window_size, because in
-        # principle all data arriving is from the past or present.
-
-    def after_getting_measurements(self):
-        self.graph.update_lines()
-        self.graph.update_bars()
-        if self.graph.reference_time and (self.graph.relative_time > self.graph.window_width):
-            self.graph.wrap()
+    def list_of_single_times_to_array(self, timelist):
+        """To be able to filter on condition and concatenate"""
+        return np.array(timelist, dtype=np.float64)
 
 
-class OscilloGraph(NumericalGraphBase):
+class OscilloGraph(GraphBase):
 
     def __init__(self,
                  names,
@@ -76,7 +55,8 @@ class OscilloGraph(NumericalGraphBase):
                  legends=None,
                  linestyles=None,
                  linestyle='.',
-                 data_as_array=False):
+                 data_as_array=False,
+                 measurement_formatter=OscilloMeasurementFormatter()):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
@@ -110,6 +90,7 @@ class OscilloGraph(NumericalGraphBase):
                          NOTE: data_as array can also be a dict of bools
                          with names as keys if some sensors come as arrays
                          and some not.
+        - measurement_formatter: MeasurementFormatter (or subclass) object.
         """
         self.data_ranges = data_ranges
         self.window_width = window_width
@@ -122,12 +103,13 @@ class OscilloGraph(NumericalGraphBase):
                          legends=legends,
                          linestyles=linestyles,
                          linestyle=linestyle,
-                         data_as_array=data_as_array)
+                         data_as_array=data_as_array,
+                         measurement_formatter=measurement_formatter)
 
-        self.current_data = self.create_empty_data()
-        self.previous_data = self.create_empty_data()
+        self.create_bars()
+        self.previous_data = self.create_empty_data()  # current_data created by the base class
 
-    # ========================== Misc. Init Methods ==========================
+    # ================== Methods subclassed from GraphBase ===================
 
     def create_axes(self):
         """Generate figure/axes as a function of input data types"""
@@ -147,7 +129,7 @@ class OscilloGraph(NumericalGraphBase):
             self.axs[datatype] = ax
 
     def format_graph(self):
-        """Set colors, time formatting, etc."""
+        """Misc. settings for graph (time formatting, limits etc.)"""
 
         w = self.window_width
         for dtype, ax in self.axs.items():
@@ -155,8 +137,43 @@ class OscilloGraph(NumericalGraphBase):
             ax.set_ylim(self.data_ranges[dtype])
             ax.grid()
 
-        self.create_lines()
-        self.create_bars()
+    def update_data(self, data):
+
+        tmin, tmax = self.get_time_boundaries(data)
+
+        if self.reference_time is None:
+            self.reference_time = tmin   # Take time of 1st data as time 0
+
+        self.update_stored_data(data=data,
+                                stored_data=self.current_data)
+
+        # In case measurement arrives late after window has already refreshed,
+        # duplicate it to previous data so that it is remains visible
+        # This is particularly useful for data arriving as arrays; in which
+        # case the array will be duplicated to appear both at the beginning
+        # and end of the window when the times in the arrays span values
+        # across the window wrapping time.
+        if tmin < self.reference_time:
+            self.update_stored_data(data=data,
+                                    stored_data=self.previous_data)
+
+        # There is no need to do the same for 'future' points that would arrive
+        # with tmax > reference_time + window_size, because in
+        # principle all data arriving is from the past or present.
+
+
+    def update(self):
+        self.update_lines()
+        self.update_bars()
+        if self.reference_time and (self.relative_time > self.window_width):
+            self.wrap()
+
+    @property
+    def animated_artists(self):
+        artists = self.lines_list + list(self.bars.values())
+        return artists
+
+    # ======================= Other graph init methods =======================
 
     def create_bars(self):
         """Create traveling bars"""
@@ -168,33 +185,11 @@ class OscilloGraph(NumericalGraphBase):
 
     # =============== Methods overriden from the parent class ================
 
-    def _list_of_single_values_to_array(self, datalist):
-        """To be able to filter on time condition and concatenate"""
-        return np.array(datalist, dtype=np.float64)
-
-    def _list_of_single_times_to_array(self, timelist):
-        """To be able to filter on time condition and concatenate"""
-        return np.array(timelist, dtype=np.float64)
-
     def on_click():
         """Here turn off autoscale, which can cause problems with blitting."""
         pass
 
     # ======= Methods that can be subclassed to adapt to applications ========
-
-    def format_measurement(self, measurement):
-        """Transform measurement from the queue into something usable by manage_data()
-
-        Can be subclassed to adapt to various applications.
-        Here, assumes data is incoming in the form of a dictionary with at
-        least keys:
-        - 'name' (str, identifier of sensor)
-        - 'time (unix)' (float or array of floats)
-        - 'values' (iterable of values, or iterable of arrays of values)
-
-        Subclass to adapt to applications.
-        """
-        return measurement
 
     def get_time_boundaries(self, data):
         """Subclass if necessary."""
@@ -215,11 +210,6 @@ class OscilloGraph(NumericalGraphBase):
     @property
     def relative_time(self):
         return self.current_time - self.reference_time
-
-    @property
-    def animated_artists(self):
-        artists = self.lines_list + list(self.bars.values())
-        return artists
 
     # ========================= Graph Update Methods =========================
 
@@ -247,8 +237,6 @@ class OscilloGraph(NumericalGraphBase):
 
     def update_lines(self):
         """Update line positions with current data."""
-
-        # Keep only previous drawings after current bar position
 
         for name in self.lines:
 
@@ -301,26 +289,3 @@ class OscilloGraph(NumericalGraphBase):
             t = self.relative_time
             for bar in self.bars.values():
                 bar.set_xdata(t)
-
-    def run(self,
-            q_plot,
-            external_stop=None,
-            dt_graph=0.02,
-            blit=True):
-        """Run live view of oscilloscope with data from queues.
-
-        (Convenience method to instantiate a UpdateGraph object)
-
-        Parameters
-        ----------
-        - q_plot: dict {name: queue} with sensor names and data queues
-        - external_stop (optional): external stop request, closes the figure if set
-        - dt graph: time interval to update the graph
-        - blit: if True, use blitting to speed up the matplotlib animation
-        """
-        update_oscillo = UpdateGraph(graph=self,
-                                     q_plot=q_plot,
-                                     external_stop=external_stop,
-                                     dt_graph=dt_graph,
-                                     blit=blit)
-        update_oscillo.run()

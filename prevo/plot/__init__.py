@@ -19,7 +19,9 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-from .general import GraphBase, NumericalGraphBase, UpdateGraphBase
-from .plot import NumericalGraph, PlotSavedData, PlotUpdatedData
-from .plot import PlotLiveSensors, PlotSavedDataUpdated
+from .general import GraphBase, UpdateGraph
+from .plot import NumericalGraph
 from .oscillo import OscilloGraph
+
+# from .plot import PlotSavedData, PlotUpdatedData
+# from .plot import PlotLiveSensors, PlotSavedDataUpdated
