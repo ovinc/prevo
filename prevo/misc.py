@@ -105,12 +105,15 @@ class PeriodicThreadedSystem:
 
     name = None
 
-    def __init__(self, interval=1, precise=False):
+    def __init__(self, interval=1, precise=False, verbose=False):
         """Parameters:
 
         - interval: update interval in seconds
         - precise (bool): use the precise option in oclock.Timer
+        - verbose: if True, print indications in console when thread
+                   is started or stopped
         """
+        self.verbose = verbose
         self.timer = oclock.Timer(interval=interval, precise=precise)
         self.thread = None
 
@@ -146,12 +149,15 @@ class PeriodicThreadedSystem:
         """Non-blocking version of _run()."""
         self.thread = Thread(target=self._run)
         self.thread.start()
+        if self.verbose:
+            print(f'Non-blocking run of {self.name} started.')
 
     def stop(self):
         self.timer.stop()
         self.thread.join()
-        print(f'Non-blocking run of {self.name} stopped.')
         self.thread = None
+        if self.verbose:
+            print(f'Non-blocking run of {self.name} stopped.')
 
     @property
     def dt(self):
@@ -171,11 +177,17 @@ class PeriodicSensor(PeriodicThreadedSystem):
     name = None         # Define in subclasses
     data_types = None   # Define in subclasses
 
-    def __init__(self, interval=1):
-        """Parameters:
-        - interval: how often to read the sensor (in seconds)
+    def __init__(self, interval=1, precise=False, verbose=False):
+        """Init PeriodicSensor object
+
+        Parameters
+        ----------
+        - interval: update interval in seconds
+        - precise (bool): use the precise option in oclock.Timer
+        - verbose: if True, print indications in console when thread
+                   is started or stopped
         """
-        super().__init__(interval=interval, precise=False)
+        super().__init__(interval=interval, precise=precise, verbose=verbose)
         self.queue = Queue()
 
     def _read(self):

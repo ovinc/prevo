@@ -58,7 +58,11 @@ class NumericalRecording(RecordingBase):
         - ctrl_ppties: optional iterable of properties (ControlledProperty
                        objects) to control on the recording in addition to
                        default ones (time interval and active on/off)
-        - active: if False, do not record data until self.active set to True.
+        - active: if False, do not read data until self.active set to True.
+        - saving: if False, do not save data to file until self.saving set to
+                  True (note: data acquired during periods with saving=False
+                  will not be saved later. This happens e.g. when one just
+                  want to plot data without saving it).
         - continuous: if True, take data as fast as possible from sensor.
         - warnings: if True, print warnings of Timer (e.g. loop too short).
         - precise: if True, use precise timer in oclock (see oclock.Timer).
@@ -163,7 +167,7 @@ class NumericalRecord(Record):
         - dirty_ok: if False, record cannot be started if git repositories are
                     not clean (commited).
 
-        Additional kwargs from RecordingBase:
+        Additional kwargs from RecordBase:
         - path: directory in which data is recorded.
         - on_start: optional iterable of objects with a .start() or .run()
                     method, that need to be started at the same time as
@@ -227,11 +231,9 @@ class NumericalRecord(Record):
 
         # In case the queue contains other measurements than numerical
         # (e.g. images from cameras)
-        numerical_queues = {
-            name: recording.queues['plotting']
-            for name, recording in self.numerical_recordings.items()
-        }
+        numerical_queues = [recording.queues['plotting']
+                            for recording in self.numerical_recordings.values()]
 
-        graph.run(q_plot=numerical_queues,
+        graph.run(queues=numerical_queues,
                   external_stop=self.internal_stop,
                   dt_graph=self.dt_graph)

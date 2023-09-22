@@ -144,6 +144,10 @@ active_ppty = ControlledProperty(attribute='active',
                                  readable='Rec. ON',
                                  commands=('on',))
 
+saving_ppty = ControlledProperty(attribute='saving',
+                                 readable='Sav. ON',
+                                 commands=('save',))
+
 
 class RecordingBase(ABC):
     """Base class for recording sensor periodically.
@@ -162,6 +166,7 @@ class RecordingBase(ABC):
         dt=1,
         ctrl_ppties=(),
         active=True,
+        saving=True,
         continuous=False,
         warnings=False,
         precise=False,
@@ -182,7 +187,11 @@ class RecordingBase(ABC):
         - ctrl_ppties: optional iterable of properties (ControlledProperty
                        objects) to control on the recording in addition to
                        default ones (time interval and active on/off)
-        - active: if False, do not record data until self.active set to True.
+        - active: if False, do not read data until self.active set to True.
+        - saving: if False, do not save data to file until self.saving set to
+                  True (note: data acquired during periods with saving=False
+                  will not be saved later. This happens e.g. when one just
+                  want to plot data without saving it).
         - continuous: if True, take data as fast as possible from sensor.
         - warnings: if True, print warnings of Timer (e.g. loop too short).
         - precise: if True, use precise timer in oclock (see oclock.Timer).
@@ -217,11 +226,26 @@ class RecordingBase(ABC):
         self.dt_save = dt_save
         self.dt_check = dt_check
 
+        # Queues in which data is put (NEED to be defined before self.saving)
+        self.queues = {
+            'saving': Queue(),
+            'plotting': Queue(),
+        }
+        # Events that need to be set to put data in each data queue
+        self.queue_events = {
+            'saving': Event(),
+            'plotting': Event(),
+        }
+
         # NOTE: DO NOT change to self.active = active because this can cause
         # problems upon init of the recording when self.sensor is not defined
         # yet, if the active setter uses properties of the sensor (e.g. to
         # turn it on or off)
         self._active = active  # can be set to False to temporarily stop recording from sensor
+
+        # NOTE: Here, KEEP saving instead of _saving because one needs to
+        # not only set the status but also activate the queues, etc.
+        self.saving = saving  # can be set to False to temporarily not save data to file
 
         self.continuous = continuous
 
@@ -243,9 +267,9 @@ class RecordingBase(ABC):
             # to not continuous, it's better to instantiate it as not
             # continuous (possibly with on=False) and then switch to
             # continuous and on=True.
-            default_ppties = (active_ppty,)
+            default_ppties = (active_ppty, saving_ppty)
         else:
-            default_ppties = (timer_ppty, active_ppty)
+            default_ppties = (active_ppty, saving_ppty, timer_ppty)
         self.controlled_properties = default_ppties + ctrl_ppties
         self._add_sensor_controlled_properties()
         self._generate_ppty_dict()
@@ -253,17 +277,6 @@ class RecordingBase(ABC):
         # Optional temporal programs to make controlled properties evolve.
         self._init_programs(programs=programs,
                             control_params=control_params)
-
-        # Queues in which data is put
-        self.queues = {
-            'saving': Queue(),
-            'plotting': Queue(),
-        }
-        # Events that need to be set to put data in each data queue
-        self.queue_events = {
-            'saving': Event(),
-            'plotting': Event(),
-        }
 
         self.threads = []
         self.internal_stop = Event()
@@ -280,6 +293,19 @@ class RecordingBase(ABC):
     @active.setter
     def active(self, value):
         self._active = value
+
+    @property
+    def saving(self):
+        """Temporarily activate/disable saving of data to file"""
+        return self._saving
+
+    @saving.setter
+    def saving(self, value):
+        self._saving = value
+        if self._saving:
+            self.activate_queue('saving')
+        else:
+            self.deactivate_queue('saving')
 
     @property
     def interval(self):
@@ -451,10 +477,6 @@ class RecordingBase(ABC):
     def data_read(self):
         """Read data from sensor and store it in data queues."""
 
-        # Can be done here because if recording not active, the loop does not
-        # put measurements in any queue anyway.
-        self.activate_queue('saving')
-
         with self.Sensor() as self.sensor:
             # Initial setting of properties is done here in case one of the
             # properties acts on the sensor object, which is not defined
@@ -499,6 +521,15 @@ class RecordingBase(ABC):
             # and for other users/programs to access the data simultaneously
             with open(self.file_manager.file, 'a', encoding='utf8') as file:
 
+                # Get all data from saving queue as long as the current
+                # iteration of the timer is still active.
+                # - If there is not a lot of data to save, the while loop will
+                #   break immediately and go to the saving_timer.checkpt()
+                #   waiting phase.
+                # - If there is a lot of data to save and/or it takes too long
+                #   then the saving_timer interval will be exceeded and the
+                #   while loop will exit, thus forcing the saving file to be
+                #   closed and re-opened.
                 while not saving_timer.interval_exceeded:
 
                     try:
@@ -512,8 +543,10 @@ class RecordingBase(ABC):
                     if self.internal_stop.is_set():  # Move to buffering waitbar
                         break
 
-                # periodic check whether there is data to save
-                saving_timer.checkpt()
+            # periodic check whether there is data to save
+            # This is outside of the with statement in order to close the
+            # file as soon as possible when not in use.
+            saving_timer.checkpt()
 
         # Buffering waitbar --------------------------------------------------
 
@@ -619,8 +652,9 @@ class RecordingBase(ABC):
 
         try:
             self._start_threads()
-        # Typically an exception will be thrown only by the with statement
-        # or ppties and programs, because the threads are in try_func decorator
+        # Typically I think there should not be exceptions here because the
+        # threads are in try_func decorator, but it's safe to catch
+        # anything that might go wrong.
         except (Exception, KeyboardInterrupt):
             print(f'Error for {self.name}. Stopping recording.')
             print_exc()
@@ -891,8 +925,6 @@ class Record:
                recording_kwargs=None,
                programs=None,
                control_params=None,
-               dt_save=1.3,
-               dt_check=0.9,
                path='.',
                **kwargs):
         """Factory method to generate a Record object from sensor names etc.
@@ -916,9 +948,6 @@ class Record:
                           to the program controls (e.g. dt, range_limits, etc.)
                           Note: if None, use default params
                           (see RecordingControl class)
-        - dt_save: how often (in seconds) queues are checked and written to files
-                   (it is also how often files are open/closed)
-        - dt_check: time interval (in seconds) for checking queue sizes.
         - path: directory in which data is recorded.
         - **kwargs is any keyword arguments to pass to Record __init__
           (only possible options: on_start and dt_request)

@@ -28,10 +28,12 @@ Can be subclassed for arbitrary measurement formatting.
 
 # Standard library imports
 from abc import ABC, abstractmethod
+from pathlib import Path
+from queue import Queue
 
 # Local imports
 from .csv import CsvFile
-
+from .misc import PeriodicThreadedSystem
 
 
 # ======================= Base classes for saved data ========================
@@ -41,11 +43,13 @@ from .csv import CsvFile
 class SavedDataBase(ABC):
     """Abstract base class for live measurements of sensors"""
 
-    def __init__(self, name):
+    def __init__(self, name, filename, path='.'):
         """Parameters:
         - name: name of sensor/recording
         """
         self.name = name
+        self.filename = filename
+        self.path = Path(path)
         self.data = None
 
     @abstractmethod
@@ -72,18 +76,28 @@ class SavedDataBase(ABC):
 # ========================== Examples of subclasses ==========================
 
 
-class SavedCsvData(CsvFile, SavedDataBase):
+class SavedCsvData(SavedDataBase):
     """Class managing saved measurements to CSV files (with pandas)"""
 
-    def __init__(self, name, filename, path='.', csv_separator='\t'):
+    def __init__(self,
+                 name,
+                 filename,
+                 path='.',
+                 csv_separator='\t'):
 
-        SavedDataBase.__init__(self, name=name)
+        super().__init__(name=name,
+                         filename=filename,
+                         path=path)
 
-        CsvFile.__init__(self, filename=filename, path=path,
-                         csv_separator=csv_separator)
+        self.csv_file = CsvFile(filename=self.filename,
+                                path=self.path,
+                                csv_separator=csv_separator)
 
     def load(self, nrange=None):
-        self.data = CsvFile.load(self, nrange=nrange)
+        self.data = self.csv_file.load(nrange=nrange)
+
+    def number_of_measurements(self):
+        return self.csv_file.number_of_measurements()
 
     def format_as_measurement(self):
         """Generate useful attributes for plotting on a Graph() object.
@@ -99,3 +113,49 @@ class SavedCsvData(CsvFile, SavedDataBase):
         # remove time columns
         measurement['values'] = [column.values for _, column in self.data.iloc[:, 2:].items()]
         return measurement
+
+
+# =========== Classes to get measurements from files periodically ============
+
+
+class PeriodicMeasurementsFromFile(PeriodicThreadedSystem):
+    """Get measurements by reading periodically from file where data is saved.
+
+    New measurements detected in file are put in a queue (self.queue).
+    """
+
+    def __init__(self, saved_data, only_new=False, **kwargs):
+        """Init PeriodicMeasurementsFromFile object
+
+        Parameters
+        ----------
+
+        - saved_data: object of the SavedData class or subclasses/equivalent
+        - only_new: if True, do not put in queue measurements that are already
+                    saved in the file when the file monitoring is started.
+
+        Additional KWARGS inherited from PeriodicThreadedSystem:
+        - interval: update interval in seconds
+        - precise (bool): use the precise option in oclock.Timer
+        """
+        self.saved_data = saved_data
+        self.only_new = only_new
+        self.queue = Queue()
+        super().__init__(**kwargs)
+
+    def _update(self):
+        """Must return data ready to put in queue."""
+        n = self.saved_data.number_of_measurements()
+        if n > self.n0:
+            self.saved_data.load(nrange=(self.n0 + 1, n))
+            if self.saved_data.data is not None:
+                measurement = self.saved_data.format_as_measurement()
+                self.queue.put(measurement)
+                self.n0 = n
+
+    def _on_start(self):
+        """Anything to do when system is started."""
+        if self.only_new:
+            self.n0 = self.saved_data.number_of_measurements()
+        else:
+            self.n0 = 0

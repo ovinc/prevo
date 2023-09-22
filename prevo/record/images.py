@@ -86,7 +86,11 @@ class ImageRecording(RecordingBase):
         - ctrl_ppties: optional iterable of properties (ControlledProperty
                        objects) to control on the recording in addition to
                        default ones (time interval and active on/off)
-        - active: if False, do not record data until self.active set to True.
+        - active: if False, do not read data until self.active set to True.
+        - saving: if False, do not save data to file until self.saving set to
+                  True (note: data acquired during periods with saving=False
+                  will not be saved later. This happens e.g. when one just
+                  want to plot data without saving it).
         - continuous: if True, take data as fast as possible from sensor.
         - warnings: if True, print warnings of Timer (e.g. loop too short).
         - precise: if True, use precise timer in oclock (see oclock.Timer).

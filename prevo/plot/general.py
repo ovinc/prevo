@@ -445,7 +445,6 @@ class UpdateGraph:
 
     def on_fig_close(self, event):
         """What to do when figure is closed."""
-        print('FIG CLOSED')
         self.stop()
 
     def plot_new_data(self, i=0):
