@@ -112,6 +112,10 @@ A minimal example is provided below, to record pressure and temperature asynchro
     # can be set to True or False to pause/resume recording
     recording.active
 
+    # can be set to True or False to pause/resume saving to file
+    # (e.g. to continue live view of data without saving)
+    recording.saving
+
     # Equivalent to playing with .active:
     recording.pause()
     recording.resume()
@@ -147,7 +151,7 @@ Live image viewer
 =================
 
 Let's assume one gets image data in a queue from a camera.
-Individual elements from the `camera.queue`` are dictionaries with keys `image` (numpy-like image array) and `num` (image number, an integer). This formatting of elements in the queue is assumed by default, but others are possible (see *examples/Viewers.ipynb*).
+Individual elements from the `camera.queue` are dictionaries with keys `image` (numpy-like image array) and `num` (image number, an integer). This formatting of elements in the queue is assumed by default, but others are possible (see *examples/Viewers.ipynb*).
 
 It is possible to view the images using either `tkinter`, `opencv` or `matplotlib`. Here we will use tkinter.
 One first has to define a *window* in which to display the images, and then a *viewer* to operate and update the window.
