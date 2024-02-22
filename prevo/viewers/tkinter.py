@@ -113,7 +113,7 @@ class TkWindow(WindowBase):
             if self.auto_size:
                 dimensions = self._adapt_image_to_window()
                 try:
-                    img_disp = img.resize(dimensions, Image.ANTIALIAS)
+                    img_disp = img.resize(dimensions, Image.LANCZOS)
                 except ValueError:  # somtimes dimensions are (0, 0) for some reason
                     img_disp = img
             else:
