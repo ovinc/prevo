@@ -45,18 +45,20 @@ class OscilloMeasurementFormatter(MeasurementFormatter):
 
 class OscilloGraph(GraphBase):
 
-    def __init__(self,
-                 names,
-                 data_types,
-                 data_ranges,
-                 window_width=10,
-                 fig=None,
-                 colors=None,
-                 legends=None,
-                 linestyles=None,
-                 linestyle='.',
-                 data_as_array=False,
-                 measurement_formatter=OscilloMeasurementFormatter()):
+    def __init__(
+        self,
+        names,
+        data_types,
+        data_ranges,
+        window_width=10,
+        fig=None,
+        colors=None,
+        legends=None,
+        linestyles=None,
+        linestyle='.',
+        data_as_array=False,
+        measurement_formatter=OscilloMeasurementFormatter(),
+    ):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
@@ -96,15 +98,17 @@ class OscilloGraph(GraphBase):
         self.window_width = window_width
         self.reference_time = None
 
-        super().__init__(names=names,
-                         data_types=data_types,
-                         fig=fig,
-                         colors=colors,
-                         legends=legends,
-                         linestyles=linestyles,
-                         linestyle=linestyle,
-                         data_as_array=data_as_array,
-                         measurement_formatter=measurement_formatter)
+        super().__init__(
+            names=names,
+            data_types=data_types,
+            fig=fig,
+            colors=colors,
+            legends=legends,
+            linestyles=linestyles,
+            linestyle=linestyle,
+            data_as_array=data_as_array,
+            measurement_formatter=measurement_formatter,
+        )
 
         self.create_bars()
         self.previous_data = self.create_empty_data()  # current_data created by the base class
@@ -144,8 +148,10 @@ class OscilloGraph(GraphBase):
         if self.reference_time is None:
             self.reference_time = tmin   # Take time of 1st data as time 0
 
-        self.update_stored_data(data=data,
-                                stored_data=self.current_data)
+        self.update_stored_data(
+            data=data,
+            stored_data=self.current_data,
+        )
 
         # In case measurement arrives late after window has already refreshed,
         # duplicate it to previous data so that it is remains visible
@@ -154,13 +160,14 @@ class OscilloGraph(GraphBase):
         # and end of the window when the times in the arrays span values
         # across the window wrapping time.
         if tmin < self.reference_time:
-            self.update_stored_data(data=data,
-                                    stored_data=self.previous_data)
+            self.update_stored_data(
+                data=data,
+                stored_data=self.previous_data,
+            )
 
         # There is no need to do the same for 'future' points that would arrive
         # with tmax > reference_time + window_size, because in
         # principle all data arriving is from the past or present.
-
 
     def update(self):
         self.update_lines()
@@ -266,9 +273,11 @@ class OscilloGraph(GraphBase):
 
             rel_times_array = np.concatenate(rel_times)
 
-            for line, prev_values, curr_values in zip(lines,
-                                                      previous_data['values'],
-                                                      current_data['values']):
+            for line, prev_values, curr_values in zip(
+                lines,
+                previous_data['values'],
+                current_data['values'],
+            ):
 
                 vals = []
 

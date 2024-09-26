@@ -38,30 +38,36 @@ except ModuleNotFoundError:
     pass
 
 
-Windows = {'cv': CvWindow,
-           'mpl': MplWindow,
-           'tk': TkWindow}
+Windows = {
+    'cv': CvWindow,
+    'mpl': MplWindow,
+    'tk': TkWindow,
+}
 
-Viewers = {'cv': CvViewer,
-           'mpl': MplViewer,
-           'tk': TkViewer}
+Viewers = {
+    'cv': CvViewer,
+    'mpl': MplViewer,
+    'tk': TkViewer,
+}
 
 
 class ImageRecording(RecordingBase):
     """Recording class to record images and associated timestamps."""
 
-    def __init__(self,
-                 Sensor,
-                 timestamp_filename,
-                 path='.',
-                 image_path=None,
-                 extension=None,
-                 ndigits=5,
-                 quality=None,
-                 column_names=None,
-                 column_formats=None,
-                 csv_separator='\t',
-                 **kwargs):
+    def __init__(
+        self,
+        Sensor,
+        timestamp_filename,
+        path='.',
+        image_path=None,
+        extension=None,
+        ndigits=5,
+        quality=None,
+        column_names=None,
+        column_formats=None,
+        csv_separator='\t',
+        **kwargs,
+    ):
         """Init ImageRecording object.
 
         Parameters
@@ -114,11 +120,13 @@ class ImageRecording(RecordingBase):
         super().__init__(Sensor=Sensor, path=path, **kwargs)
 
         # Here, file manager manages only the timestamp file, not the images
-        self.file_manager = CsvFile(filename=timestamp_filename,
-                                    column_names=column_names,
-                                    column_formats=column_formats,
-                                    path=path,
-                                    csv_separator=csv_separator)
+        self.file_manager = CsvFile(
+            filename=timestamp_filename,
+            column_names=column_names,
+            column_formats=column_formats,
+            path=path,
+            csv_separator=csv_separator,
+        )
 
         self.image_path = self.path / Sensor.name if image_path is None else image_path
         self.image_path.mkdir(exist_ok=True)
@@ -191,14 +199,16 @@ class ImageRecording(RecordingBase):
 class ImageRecord(Record):
     """Main class managing simultaneous temporal recordings of images."""
 
-    def __init__(self,
-                 recordings,
-                 metadata_filename='Images_Metadata.json',
-                 checked_modules=(),
-                 dt_graph=0.02,
-                 viewer='tk',
-                 dirty_ok=True,
-                 **kwargs):
+    def __init__(
+        self,
+        recordings,
+        metadata_filename='Images_Metadata.json',
+        checked_modules=(),
+        dt_graph=0.02,
+        viewer='tk',
+        dirty_ok=True,
+        **kwargs,
+    ):
         """Init ImageRecord object.
 
         Parameters
@@ -259,14 +269,16 @@ class ImageRecord(Record):
                 **recording.info,
             }
 
-        gittools.save_metadata(metadata_file,
-                               info=info,
-                               module=self.checked_modules,
-                               dirty_warning=True,
-                               dirty_ok=self.dirty_ok,
-                               notag_warning=True,
-                               nogit_ok=True,
-                               nogit_warning=True)
+        gittools.save_metadata(
+            metadata_file,
+            info=info,
+            module=self.checked_modules,
+            dirty_warning=True,
+            dirty_ok=self.dirty_ok,
+            notag_warning=True,
+            nogit_ok=True,
+            nogit_warning=True,
+        )
 
     def save_metadata(self):
         """Save sensor info and version of modules used"""
@@ -281,10 +293,17 @@ class ImageRecord(Record):
         windows = []
         for name, recording in self.image_recordings.items():
             image_queue = recording.queues['plotting']
-            win = Window(image_queue, name=name, show_num=True, show_fps=True)
+            win = Window(
+                image_queue,
+                name=name,
+                show_num=True,
+                show_fps=True,
+            )
             windows.append(win)
 
-        viewer = Viewer(windows,
-                        external_stop=self.internal_stop,
-                        dt_graph=self.dt_graph)
+        viewer = Viewer(
+            windows,
+            external_stop=self.internal_stop,
+            dt_graph=self.dt_graph,
+        )
         viewer.start()

@@ -32,12 +32,14 @@ except ModuleNotFoundError:
 
 class CsvFile:
 
-    def __init__(self,
-                 filename,
-                 column_names=None,
-                 column_formats=None,
-                 path='.',
-                 csv_separator='\t'):
+    def __init__(
+        self,
+        filename,
+        column_names=None,
+        column_formats=None,
+        path='.',
+        csv_separator='\t',
+    ):
         """Parameters:
 
         - path: str or pathlib.Path object: folder in which file is located

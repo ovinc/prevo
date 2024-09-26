@@ -31,11 +31,12 @@ from .general import WindowBase, ViewerBase, CONFIG, DISPOSITIONS
 class TkWindow(WindowBase):
     """Live view of images using tkinter"""
 
-    def __init__(self,
-                 image_queue,
-                 auto_size=True,
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        image_queue,
+        auto_size=True,
+        **kwargs,
+    ):
         """Init TkSingleViewer object
 
         Parameters
@@ -73,22 +74,26 @@ class TkWindow(WindowBase):
     def _init_window(self):
         """Create tkinter window and elements."""
         if self.name is not None:
-            self.title_label = tk.Label(self.parent,
-                                        text=self.name,
-                                        font=(CONFIG['fontfamily'], 14),
-                                        bg=CONFIG['bgcolor'],
-                                        fg=CONFIG['textcolor'])
+            self.title_label = tk.Label(
+                self.parent,
+                text=self.name,
+                font=(CONFIG['fontfamily'], 14),
+                bg=CONFIG['bgcolor'],
+                fg=CONFIG['textcolor'],
+            )
             self.title_label.pack(expand=True)
 
         self.image_label = tk.Label(self.parent, highlightthickness=0)
         self.image_label.pack(expand=True)
 
         if self.info_queues:
-            self.info_label = tk.Label(self.parent,
-                                       bg=CONFIG['bgcolor'],
-                                       fg=CONFIG['textcolor'],
-                                       font=(CONFIG['fontfamily'], 12),
-                                       text=str('...'))
+            self.info_label = tk.Label(
+                self.parent,
+                bg=CONFIG['bgcolor'],
+                fg=CONFIG['textcolor'],
+                font=(CONFIG['fontfamily'], 12),
+                text=str('...'),
+            )
             self.info_label.pack(expand=True)
 
         self.image_count = 0
@@ -149,10 +154,12 @@ class TkWindow(WindowBase):
 class TkViewer(ViewerBase):
     """Live view of images from multiple cameras using tkinter"""
 
-    def __init__(self,
-                 windows,
-                 fit_to_screen=True,
-                 **kwargs):
+    def __init__(
+        self,
+        windows,
+        fit_to_screen=True,
+        **kwargs,
+    ):
         """Init TkViewer object
 
         Parameters

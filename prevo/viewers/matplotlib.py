@@ -31,9 +31,11 @@ from .general import WindowBase, ViewerBase, CONFIG, DISPOSITIONS
 class MplWindow(WindowBase):
     """Display camera images using Matplotlib"""
 
-    def __init__(self,
-                 image_queue,
-                 **kwargs):
+    def __init__(
+        self,
+        image_queue,
+        **kwargs,
+    ):
         """Init MplSingleViewer object.
 
         Parameters
@@ -76,9 +78,11 @@ class MplWindow(WindowBase):
 
     def _format_axes(self):
         """"Set colors, title etc."""
-        self.ax.set_title(self.name,
-                          color=CONFIG['textcolor'],
-                          fontfamily=CONFIG['fontfamily'])
+        self.ax.set_title(
+            self.name,
+            color=CONFIG['textcolor'],
+            fontfamily=CONFIG['fontfamily'],
+        )
 
         for location in 'bottom', 'top', 'left', 'right':
             # self.ax.spines[location].set_color(textcolor)
@@ -90,15 +94,19 @@ class MplWindow(WindowBase):
     def _init_image(self, image):
         kwargs = {} if image.ndim > 2 else {'cmap': 'gray'}
 
-        self.im = self.ax.imshow(image,
-                                 animated=True,
-                                 vmin=0,
-                                 vmax=max_possible_pixel_value(image),
-                                 **kwargs)
+        self.im = self.ax.imshow(
+            image,
+            animated=True,
+            vmin=0,
+            vmax=max_possible_pixel_value(image),
+            **kwargs,
+        )
         self.init_done = True
-        self.xlabel = self.ax.set_xlabel('...',
-                                         color=CONFIG['textcolor'],
-                                         fontfamily=CONFIG['fontfamily'])
+        self.xlabel = self.ax.set_xlabel(
+            '...',
+            color=CONFIG['textcolor'],
+            fontfamily=CONFIG['fontfamily'],
+        )
 
     def _update(self, i=0):
         """Indicate what happens at each step of the matplotlib animation."""
@@ -124,11 +132,13 @@ class MplWindow(WindowBase):
 class MplViewer(ViewerBase):
     """Display several cameras at the same time using Matplotlib"""
 
-    def __init__(self,
-                 windows,
-                 fig=None,
-                 blit=True,
-                 **kwargs):
+    def __init__(
+        self,
+        windows,
+        fig=None,
+        blit=True,
+        **kwargs,
+    ):
         """
         Init MplViewer object
 
@@ -187,11 +197,13 @@ class MplViewer(ViewerBase):
 
     def _run(self):
         """Main function to run the animation"""
-        self.ani = FuncAnimation(self.fig,
-                                 self._update,
-                                 interval=int(self.dt_graph) * 1000,
-                                 blit=self.blit,
-                                 cache_frame_data=False)
+        self.ani = FuncAnimation(
+            self.fig,
+            self._update,
+            interval=int(self.dt_graph) * 1000,
+            blit=self.blit,
+            cache_frame_data=False,
+        )
         plt.show(block=True)
         return self.ani
 

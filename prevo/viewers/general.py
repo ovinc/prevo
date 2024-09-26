@@ -43,10 +43,12 @@ CONFIG = {
 
 
 # How to place elements on window as a function of number of widgets
-DISPOSITIONS = {1: (1, 1),
-                2: (1, 2),
-                3: (1, 3),
-                4: (2, 2)}
+DISPOSITIONS = {
+    1: (1, 1),
+    2: (1, 2),
+    3: (1, 3),
+    4: (2, 2),
+}
 
 
 # =============================== MISC. Tools ================================
@@ -76,9 +78,11 @@ class InfoSender(ABC):
 
     For example: fps, image info, etc.
     """
-    def __init__(self,
-                 queue=None,
-                 dt_check=1):
+    def __init__(
+        self,
+        queue=None,
+        dt_check=1,
+    ):
         """Init info sender object
 
         Parameters
@@ -124,10 +128,12 @@ class LiveFpsCalculator(InfoSender):
     fps values are sent back in another queue as str
     """
 
-    def __init__(self,
-                 time_queue,
-                 queue=None,
-                 dt_check=1):
+    def __init__(
+        self,
+        time_queue,
+        queue=None,
+        dt_check=1,
+    ):
         """Parameters:
 
         - time_queue: queue from which display times arrive
@@ -153,10 +159,12 @@ class LiveImageNumber(InfoSender):
     fps values are sent back in another queue as str
     """
 
-    def __init__(self,
-                 num_queue,
-                 queue=None,
-                 dt_check=1):
+    def __init__(
+        self,
+        num_queue,
+        queue=None,
+        dt_check=1,
+    ):
         """Parameters:
 
         - num_queue: queue from which image numbers arrive
@@ -205,23 +213,22 @@ class MeasurementFormatter:
 default_measurement_formatter = MeasurementFormatter()
 
 
-
 # =============================== Base classes ===============================
-
 
 class WindowBase:
     """Base class for windows managing single image queues."""
 
-    def __init__(self,
-                 image_queue,
-                 name=None,
-                 calculate_fps=False,
-                 show_fps=False,
-                 show_num=False,
-                 dt_fps=2,
-                 dt_num=0.2,
-                 measurement_formatter=default_measurement_formatter,
-                 ):
+    def __init__(
+        self,
+        image_queue,
+        name=None,
+        calculate_fps=False,
+        show_fps=False,
+        show_num=False,
+        dt_fps=2,
+        dt_num=0.2,
+        measurement_formatter=default_measurement_formatter,
+    ):
         """Init Window object.
 
         Parameters
@@ -381,10 +388,12 @@ class WindowBase:
 class ViewerBase:
     """Base class for Viewers (contain windows)"""
 
-    def __init__(self,
-                 windows,
-                 external_stop=None,
-                 dt_graph=0.02):
+    def __init__(
+        self,
+        windows,
+        external_stop=None,
+        dt_graph=0.02,
+    ):
         """Init ViewerBase object
 
         Parameters

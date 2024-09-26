@@ -79,19 +79,25 @@ class SavedDataBase(ABC):
 class SavedCsvData(SavedDataBase):
     """Class managing saved measurements to CSV files (with pandas)"""
 
-    def __init__(self,
-                 name,
-                 filename,
-                 path='.',
-                 csv_separator='\t'):
+    def __init__(
+        self,
+        name,
+        filename,
+        path='.',
+        csv_separator='\t',
+    ):
 
-        super().__init__(name=name,
-                         filename=filename,
-                         path=path)
+        super().__init__(
+            name=name,
+            filename=filename,
+            path=path,
+        )
 
-        self.csv_file = CsvFile(filename=self.filename,
-                                path=self.path,
-                                csv_separator=csv_separator)
+        self.csv_file = CsvFile(
+            filename=self.filename,
+            path=self.path,
+            csv_separator=csv_separator,
+        )
 
     def load(self, nrange=None):
         self.data = self.csv_file.load(nrange=nrange)
@@ -124,7 +130,12 @@ class PeriodicMeasurementsFromFile(PeriodicThreadedSystem):
     New measurements detected in file are put in a queue (self.queue).
     """
 
-    def __init__(self, saved_data, only_new=False, **kwargs):
+    def __init__(
+        self,
+        saved_data,
+        only_new=False,
+        **kwargs,
+    ):
         """Init PeriodicMeasurementsFromFile object
 
         Parameters

@@ -50,18 +50,16 @@ else:
 
 
 # How to place elements on window as a function of number of widgets
-DISPOSITIONS = {1: (1, 1),
-                2: (1, 2),
-                3: (1, 3),
-                4: (2, 2)}
-
-
+DISPOSITIONS = {
+    1: (1, 1),
+    2: (1, 2),
+    3: (1, 3),
+    4: (2, 2),
+}
 
 # Misc =======================================================================
 
-
 local_timezone = tzlocal.get_localzone()
-
 
 
 class MeasurementFormatter:
@@ -139,17 +137,19 @@ class MeasurementFormatter:
 class GraphBase(ABC):
     """Base class for managing plotting of arbitrary measurement data"""
 
-    def __init__(self,
-                 names,
-                 data_types,
-                 fig=None,
-                 colors=None,
-                 legends=None,
-                 linestyles=None,
-                 linestyle='.',
-                 data_as_array=False,
-                 time_conversion='numpy',
-                 measurement_formatter=MeasurementFormatter()):
+    def __init__(
+        self,
+        names,
+        data_types,
+        fig=None,
+        colors=None,
+        legends=None,
+        linestyles=None,
+        linestyle='.',
+        data_as_array=False,
+        time_conversion='numpy',
+        measurement_formatter=MeasurementFormatter(),
+    ):
         """Initiate figures and axes for data plot as a function of asked types.
 
         Input
@@ -386,11 +386,13 @@ class GraphBase(ABC):
 
     # ================= Update graph with data from queue(s) =================
 
-    def run(self,
-            queues,
-            external_stop=None,
-            dt_graph=0.1,
-            blit=False):
+    def run(
+        self,
+        queues,
+        external_stop=None,
+        dt_graph=0.1,
+        blit=False,
+    ):
         """Run live view of plot with data from queues.
 
         (Convenience method to instantiate a UpdateGraph object)
@@ -402,25 +404,30 @@ class GraphBase(ABC):
         - dt graph: time interval to update the graph
         - blit: if True, use blitting to speed up the matplotlib animation
         """
-        update_graph = UpdateGraph(graph=self,
-                                   queues=queues,
-                                   external_stop=external_stop,
-                                   dt_graph=dt_graph,
-                                   blit=blit)
+        update_graph = UpdateGraph(
+            graph=self,
+            queues=queues,
+            external_stop=external_stop,
+            dt_graph=dt_graph,
+            blit=blit,
+        )
         update_graph.run()
 
     def close(self):
         """Close matplotlib figure associated with graph"""
         plt.close(self.graph.fig)
 
+
 class UpdateGraph:
 
-    def __init__(self,
-                 graph,
-                 queues,
-                 external_stop=None,
-                 dt_graph=0.1,
-                 blit=False):
+    def __init__(
+        self,
+        graph,
+        queues,
+        external_stop=None,
+        dt_graph=0.1,
+        blit=False,
+    ):
         """Update plot with data received from a queue.
 
         INPUTS
@@ -468,13 +475,15 @@ class UpdateGraph:
 
     def run(self):
 
-        # Below, it does not work if there is no value = before the FuncAnimation
-        ani = FuncAnimation(fig=self.graph.fig,
-                            func=self.plot_new_data,
-                            interval=self.dt_graph * 1000,
-                            cache_frame_data=False,
-                            save_count=0,
-                            blit=self.blit)
+        # Below, it doesn't work if there is no ani = before the FuncAnimation
+        ani = FuncAnimation(
+            fig=self.graph.fig,
+            func=self.plot_new_data,
+            interval=self.dt_graph * 1000,
+            cache_frame_data=False,
+            save_count=0,
+            blit=self.blit,
+        )
 
         plt.show(block=True)  # block=True allows the animation to work even
         # when matplotlib is in interactive mode (plt.ion()).

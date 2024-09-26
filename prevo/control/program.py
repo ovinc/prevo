@@ -81,10 +81,12 @@ def _circular_permutation(x):
 class Program:
     """Class for managing programmable cycles for control of devices."""
 
-    def __init__(self,
-                 control=None,
-                 repeat=0,
-                 **steps):
+    def __init__(
+        self,
+        control=None,
+        repeat=0,
+        **steps,
+    ):
         """Initiate temperature cycle(s) program on device.
 
         Parameters
@@ -393,14 +395,16 @@ class Stairs(Program):
 class Teeth(Program):
     """Plateaus of fixed duration separated by ramps of constant slope."""
 
-    def __init__(self,
-                 control=None,
-                 slope=None,
-                 slope_unit='/min',
-                 plateau_duration='::',
-                 start='plateau',
-                 repeat=0,
-                 **steps):
+    def __init__(
+        self,
+        control=None,
+        slope=None,
+        slope_unit='/min',
+        plateau_duration='::',
+        start='plateau',
+        repeat=0,
+        **steps,
+    ):
         """Plateaus of fixed duration separated by ramps of constant slope.
 
         Parameters

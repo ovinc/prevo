@@ -136,17 +136,23 @@ class SensorBase(ABC):
 # ----------------------------------------------------------------------------
 
 
-timer_ppty = ControlledProperty(attribute='interval',
-                                readable='Δt (s)',
-                                commands=('dt',))
+timer_ppty = ControlledProperty(
+    attribute='interval',
+    readable='Δt (s)',
+    commands=('dt',),
+)
 
-active_ppty = ControlledProperty(attribute='active',
-                                 readable='Rec. ON',
-                                 commands=('on',))
+active_ppty = ControlledProperty(
+    attribute='active',
+    readable='Rec. ON',
+    commands=('on',),
+)
 
-saving_ppty = ControlledProperty(attribute='saving',
-                                 readable='Sav. ON',
-                                 commands=('save',))
+saving_ppty = ControlledProperty(
+    attribute='saving',
+    readable='Sav. ON',
+    commands=('save',),
+)
 
 
 class RecordingBase(ABC):
@@ -214,10 +220,12 @@ class RecordingBase(ABC):
         """
         self.Sensor = Sensor
         self.name = Sensor.name
-        self.timer = oclock.Timer(interval=dt,
-                                  name=self.name,
-                                  warnings=warnings,
-                                  precise=precise)
+        self.timer = oclock.Timer(
+            interval=dt,
+            name=self.name,
+            warnings=warnings,
+            precise=precise,
+        )
         self.immediate = immediate
 
         self.path = Path(path)
@@ -275,8 +283,10 @@ class RecordingBase(ABC):
         self._generate_ppty_dict()
 
         # Optional temporal programs to make controlled properties evolve.
-        self._init_programs(programs=programs,
-                            control_params=control_params)
+        self._init_programs(
+            programs=programs,
+            control_params=control_params,
+        )
 
         self.threads = []
         self.internal_stop = Event()
@@ -335,9 +345,11 @@ class RecordingBase(ABC):
     def _add_sensor_controlled_properties(self):
         for ppty in self.Sensor.controlled_properties:
             new_attribute = 'sensor.' + ppty.attribute
-            new_ppty = ControlledProperty(attribute=new_attribute,
-                                          readable=ppty.readable,
-                                          commands=ppty.commands)
+            new_ppty = ControlledProperty(
+                attribute=new_attribute,
+                readable=ppty.readable,
+                commands=ppty.commands,
+            )
             self.controlled_properties += (new_ppty,)
 
     def _generate_ppty_dict(self):
@@ -362,11 +374,13 @@ class RecordingBase(ABC):
             else:
                 control_kwargs = {}
             log_filename = f'Control_Log_{self.name}_[{ppty.readable}].txt'
-            program.control = RecordingControl(recording=self,
-                                               ppty=ppty,
-                                               log_file=log_filename,
-                                               savepath=self.path,
-                                               **control_kwargs)
+            program.control = RecordingControl(
+                recording=self,
+                ppty=ppty,
+                log_file=log_filename,
+                savepath=self.path,
+                **control_kwargs,
+            )
             self.programs += (program,)
 
     def _stop_programs(self):
@@ -686,11 +700,13 @@ class Record:
 
     Recordings objects are of type RecordingBase or subclasses."""
 
-    def __init__(self,
-                 recordings,
-                 path='.',
-                 on_start=(),
-                 dt_request=0.7):
+    def __init__(
+        self,
+        recordings,
+        path='.',
+        on_start=(),
+        dt_request=0.7,
+    ):
         """Init base class for recording data
 
         Parameters
@@ -738,13 +754,17 @@ class Record:
         self.internal_stop = Event()  # event set to stop recording when needed.
         self.graph_request = Event()  # event set to start plotting the data in real time
 
-        graph_event = ControlledEvent(event=self.graph_request,
-                                      readable='graph',
-                                      commands=('g', 'graph'))
+        graph_event = ControlledEvent(
+            event=self.graph_request,
+            readable='graph',
+            commands=('g', 'graph'),
+        )
 
-        stop_event = ControlledEvent(event=self.internal_stop,
-                                     readable='stop',
-                                     commands=('q', 'Q', 'quit'))
+        stop_event = ControlledEvent(
+            event=self.internal_stop,
+            readable='stop',
+            commands=('q', 'Q', 'quit'),
+        )
 
         self.controlled_events = graph_event, stop_event
 
@@ -917,16 +937,18 @@ class Record:
     # ============================ Factory method ============================
 
     @classmethod
-    def create(cls,
-               mode=None,
-               sensors=(),
-               default_names=None,
-               recording_types=None,
-               recording_kwargs=None,
-               programs=None,
-               control_params=None,
-               path='.',
-               **kwargs):
+    def create(
+        cls,
+        mode=None,
+        sensors=(),
+        default_names=None,
+        recording_types=None,
+        recording_kwargs=None,
+        programs=None,
+        control_params=None,
+        path='.',
+        **kwargs,
+    ):
         """Factory method to generate a Record object from sensor names etc.
 
         Parameters
@@ -968,11 +990,13 @@ class Record:
         recordings = []
         for name in names:
             Recording = recording_types[name]
-            recording = Recording(Sensor=all_sensors[name],
-                                  path=path,
-                                  programs=all_programs[name],
-                                  control_params=control_params,
-                                  **recording_kwargs[name])
+            recording = Recording(
+                Sensor=all_sensors[name],
+                path=path,
+                programs=all_programs[name],
+                control_params=control_params,
+                **recording_kwargs[name],
+            )
             recordings.append(recording)
 
         return cls(recordings=recordings, path=path, **kwargs)

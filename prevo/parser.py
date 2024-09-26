@@ -23,10 +23,12 @@
 import argparse
 
 
-def parse_function(functions,
-                   package_name=None,
-                   description='',
-                   default_function=None):
+def parse_function(
+    functions,
+    package_name=None,
+    description='',
+    default_function=None,
+):
     """Trigger a function with arguments from command line.
 
     Parameters
@@ -42,12 +44,15 @@ def parse_function(functions,
     - default_function: name of the function (functions dict key) that is
                         triggered if no function name is given (optional).
     """
+    parser_kwargs = {}
     if package_name is not None:
-        add_kwargs = {'prog': f"python -m {package_name}"}
+        parser_kwargs['prog'] = f"python -m {package_name}"
 
-    parser = argparse.ArgumentParser(description=description,
-                                     formatter_class=argparse.RawTextHelpFormatter,
-                                     **add_kwargs)
+    parser = argparse.ArgumentParser(
+        description=description,
+        formatter_class=argparse.RawTextHelpFormatter,
+        **parser_kwargs,
+    )
 
     # The nargs='?' is to have a positional argument with a default value
     msg_func = f"\nFunction to trigger.\nAvailable: {', '.join(functions)}."
@@ -56,11 +61,23 @@ def parse_function(functions,
         msg_func += f"\nDefault: {default_function}."
         add_kwargs['default'] = default_function
 
-    parser.add_argument('function', type=str, nargs='?', help=msg_func, **add_kwargs)
+    parser.add_argument(
+        'function',
+        type=str,
+        nargs='?',
+        help=msg_func,
+        **add_kwargs,
+    )
 
     msg_args = '\nArgs/kwargs of function.\nNo quotes required around str.'
     msg_args += "\nOther types inferred.\nExample foo a=hello for foo(a='hello')"
-    parser.add_argument('arguments', type=str, nargs='*', help=msg_args)
+
+    parser.add_argument(
+        'arguments',
+        type=str,
+        nargs='*',
+        help=msg_args,
+    )
 
     parsed = parser.parse_args()
 

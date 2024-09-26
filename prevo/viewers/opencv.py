@@ -32,7 +32,12 @@ except ModuleNotFoundError:
 class CvWindow(WindowBase):
     """Display camera images using OpenCV"""
 
-    def __init__(self, image_queue, name, **kwargs):
+    def __init__(
+        self,
+        image_queue,
+        name,
+        **kwargs,
+    ):
         """Init Window object.
 
         Parameters
@@ -76,9 +81,11 @@ class CvWindow(WindowBase):
 class CvViewer(ViewerBase):
     """Display several cameras at the same time using OpenCV"""
 
-    def __init__(self,
-                 windows,
-                 **kwargs):
+    def __init__(
+        self,
+        windows,
+        **kwargs,
+    ):
         """Init CvViewer object
 
         Parameters

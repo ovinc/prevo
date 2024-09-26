@@ -105,7 +105,12 @@ class PeriodicThreadedSystem:
 
     name = None
 
-    def __init__(self, interval=1, precise=False, verbose=False):
+    def __init__(
+        self,
+        interval=1,
+        precise=False,
+        verbose=False,
+    ):
         """Parameters:
 
         - interval: update interval in seconds
@@ -177,7 +182,12 @@ class PeriodicSensor(PeriodicThreadedSystem):
     name = None         # Define in subclasses
     data_types = None   # Define in subclasses
 
-    def __init__(self, interval=1, precise=False, verbose=False):
+    def __init__(
+        self,
+        interval=1,
+        precise=False,
+        verbose=False,
+    ):
         """Init PeriodicSensor object
 
         Parameters
@@ -229,9 +239,11 @@ class DummyPressureSensor:
             val1.append(3170 + random())
             val2.append(2338 + 2 * random())
             val3.append(17.06 + 0.5 * random())
-        return {'P1 (Pa)': mean(val1),
-                'P2 (Pa)': mean(val2),
-                'P3 (mbar)': mean(val3)}
+        return {
+            'P1 (Pa)': mean(val1),
+            'P2 (Pa)': mean(val2),
+            'P3 (mbar)': mean(val3),
+        }
 
 
 class DummyTemperatureSensor:
@@ -245,8 +257,10 @@ class DummyTemperatureSensor:
         for _ in range(int(avg)):
             val1.append(25 + 0.5 * random())
             val2.append(22.3 + 0.3 * random())
-        return {'T1 (°C)': mean(val1),
-                'T2 (°C)': mean(val2)}
+        return {
+            'T1 (°C)': mean(val1),
+            'T2 (°C)': mean(val2),
+        }
 
 
 class DummyElectricalSensor:
@@ -259,9 +273,7 @@ class DummyElectricalSensor:
 
     def read(self):
         t0 = time.time() - self.interval
-        time_array = t0 + np.linspace(start=0,
-                                      stop=self.interval,
-                                      num=self.npts)
+        time_array = t0 + np.linspace(0, self.interval, num=self.npts)
         data_array_a = 0.1 * np.random.rand(self.npts) + 0.7
         data_array_b = 0.2 * np.random.rand(self.npts) + 0.3
         return np.vstack((time_array, data_array_a, data_array_b))
@@ -322,11 +334,11 @@ class DummyPump:
 
     @property
     def status(self):
-
-        return {'running': self._running,
-                'rpm': self._rpm,
-                'normal speed': self._normal_speed}
-
+        return {
+            'running': self._running,
+            'rpm': self._rpm,
+            'normal speed': self._normal_speed,
+        }
 
 
 class DummyLapseCamera(PeriodicSensor):
@@ -343,5 +355,7 @@ class DummyLapseCamera(PeriodicSensor):
         """Return dict with image and timestamp"""
         with oclock.measure_time() as data:
             data['image'] = self._read()['image']
-        return {'image': data['image'],
-                'timestamp': data['time (unix)']}
+        return {
+            'image': data['image'],
+            'timestamp': data['time (unix)'],
+        }

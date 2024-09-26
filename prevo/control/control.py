@@ -50,13 +50,15 @@ class Control:
     # To be defined in subclasses as an iterable, if necessary
     possible_inputs = None
 
-    def __init__(self,
-                 range_limits,
-                 round_digits=3,
-                 print_log=False,
-                 save_log=True,
-                 log_file='Control_Log.txt',
-                 savepath='.'):
+    def __init__(
+        self,
+        range_limits,
+        round_digits=3,
+        print_log=False,
+        save_log=True,
+        log_file='Control_Log.txt',
+        savepath='.',
+    ):
         """Init control object, with parameters:
 
         - range_limits: limits in settable parameter value (tuple min, max)
@@ -165,29 +167,51 @@ class Control:
 
     # ------------- Factory methods to generate program objects --------------
 
-    def program(self, repeat=1, **steps):
+    def program(
+        self,
+        repeat=1,
+        **steps,
+    ):
         """Convenience method to generate a program. see Program Class."""
-        return Program(control=self,
-                       repeat=repeat,
-                       **steps)
+        return Program(
+            control=self,
+            repeat=repeat,
+            **steps,
+        )
 
-    def stairs(self, duration=None, repeat=1, **steps):
+    def stairs(
+        self,
+        duration=None,
+        repeat=1,
+        **steps,
+    ):
         """Convenience method to generate a stairs program. see Stairs Class."""
-        return Stairs(control=self,
-                      duration=duration,
-                      repeat=repeat,
-                      **steps)
+        return Stairs(
+            control=self,
+            duration=duration,
+            repeat=repeat,
+            **steps,
+        )
 
-    def teeth(self, slope=None, slope_unit='/min', plateau_duration=None,
-              start='plateau', repeat=1, **steps):
+    def teeth(
+        self,
+        slope=None,
+        slope_unit='/min',
+        plateau_duration=None,
+        start='plateau',
+        repeat=1,
+        **steps,
+    ):
         """Convenience method to generate a teeth program. see Teeth Class."""
-        return Teeth(control=self,
-                     slope=slope,
-                     slope_unit=slope_unit,
-                     plateau_duration=plateau_duration,
-                     start=start,
-                     repeat=repeat,
-                     **steps)
+        return Teeth(
+            control=self,
+            slope=slope,
+            slope_unit=slope_unit,
+            plateau_duration=plateau_duration,
+            start=start,
+            repeat=repeat,
+            **steps,
+        )
 
 
 # ----------------------------------------------------------------------------
@@ -198,14 +222,16 @@ class Control:
 class PeriodicControl(Control):
     """Control using periodic update of device setting, no feedback"""
 
-    def __init__(self,
-                 dt=1,
-                 range_limits=(None, None),
-                 round_digits=3,
-                 print_log=False,
-                 save_log=True,
-                 log_file='Control_Log.txt',
-                 savepath='.'):
+    def __init__(
+        self,
+        dt=1,
+        range_limits=(None, None),
+        round_digits=3,
+        print_log=False,
+        save_log=True,
+        log_file='Control_Log.txt',
+        savepath='.',
+    ):
         """Create PeriodicControl object, with parameters:
 
         - dt: time interval (s) between commands
@@ -219,13 +245,15 @@ class PeriodicControl(Control):
                     (default: Control_Log.txt)
         - savepath: directory in which to save the log file
         """
-        Control.__init__(self,
-                         range_limits=range_limits,
-                         round_digits=round_digits,
-                         print_log=print_log,
-                         save_log=save_log,
-                         log_file=log_file,
-                         savepath=savepath)
+        Control.__init__(
+            self,
+            range_limits=range_limits,
+            round_digits=round_digits,
+            print_log=print_log,
+            save_log=save_log,
+            log_file=log_file,
+            savepath=savepath,
+        )
         self._dt = dt
         self.timer = oclock.Timer(interval=dt)
         self.stop_event = Event()
@@ -428,16 +456,18 @@ class PeriodicControl(Control):
 class RecordingControl(PeriodicControl):
     """Control of prevo Recordings objects"""
 
-    def __init__(self,
-                 recording=None,
-                 ppty=None,
-                 dt=1,
-                 range_limits=(None, None),
-                 round_digits=3,
-                 print_log=False,
-                 save_log=True,
-                 log_file='Control_Log_Recording.txt',
-                 savepath='.'):
+    def __init__(
+        self,
+        recording=None,
+        ppty=None,
+        dt=1,
+        range_limits=(None, None),
+        round_digits=3,
+        print_log=False,
+        save_log=True,
+        log_file='Control_Log_Recording.txt',
+        savepath='.',
+    ):
         """Create PeriodicTemperatureControl object, with parameters:
 
         - recording: Recording object or subclass.
@@ -457,14 +487,16 @@ class RecordingControl(PeriodicControl):
         self.ppty = ppty
         self.possible_inputs = self.ppty.commands
 
-        PeriodicControl.__init__(self,
-                                 dt=dt,
-                                 range_limits=range_limits,
-                                 round_digits=round_digits,
-                                 print_log=print_log,
-                                 save_log=save_log,
-                                 log_file=log_file,
-                                 savepath=savepath)
+        PeriodicControl.__init__(
+            self,
+            dt=dt,
+            range_limits=range_limits,
+            round_digits=round_digits,
+            print_log=print_log,
+            save_log=save_log,
+            log_file=log_file,
+            savepath=savepath,
+        )
 
         self.recording = recording
 

@@ -34,14 +34,16 @@ from ..misc import increment_filename
 class NumericalRecording(RecordingBase):
     """Recording class that saves numerical sensor data to csv files."""
 
-    def __init__(self,
-                 Sensor,
-                 filename,
-                 path='.',
-                 column_names=None,
-                 column_formats=None,
-                 csv_separator='\t',
-                 **kwargs):
+    def __init__(
+        self,
+        Sensor,
+        filename,
+        path='.',
+        column_names=None,
+        column_formats=None,
+        csv_separator='\t',
+        **kwargs,
+    ):
         """Init NumericalRecording object.
 
         Parameters
@@ -85,12 +87,13 @@ class NumericalRecording(RecordingBase):
         """
         super().__init__(Sensor=Sensor, path=path, **kwargs)
 
-        self.file_manager = CsvFile(filename=filename,
-                                    column_names=column_names,
-                                    column_formats=column_formats,
-                                    path=path,
-                                    csv_separator=csv_separator)
-
+        self.file_manager = CsvFile(
+            filename=filename,
+            column_names=column_names,
+            column_formats=column_formats,
+            path=path,
+            csv_separator=csv_separator,
+        )
 
     def format_measurement(self, measurement):
         """Format raw sensor data into a measurement object.
@@ -136,17 +139,19 @@ class NumericalRecording(RecordingBase):
 class NumericalRecord(Record):
     """Class managing simultaneous temporal recordings of numerical sensors"""
 
-    def __init__(self,
-                 recordings,
-                 metadata_filename='Numerical_Metadata.json',
-                 checked_modules=(),
-                 data_types=None,
-                 dt_graph=0.1,
-                 graph_legends=None,
-                 graph_colors=None,
-                 graph_linestyle='.',
-                 dirty_ok=True,
-                 **kwargs):
+    def __init__(
+        self,
+        recordings,
+        metadata_filename='Numerical_Metadata.json',
+        checked_modules=(),
+        data_types=None,
+        dt_graph=0.1,
+        graph_legends=None,
+        graph_colors=None,
+        graph_linestyle='.',
+        dirty_ok=True,
+        **kwargs,
+    ):
         """Init NumericalRecord object.
 
         Parameters
@@ -204,13 +209,15 @@ class NumericalRecord(Record):
         if metadata_file.exists():
             metadata_file = increment_filename(metadata_file)
 
-        gittools.save_metadata(metadata_file,
-                               module=self.checked_modules,
-                               dirty_warning=True,
-                               dirty_ok=self.dirty_ok,
-                               notag_warning=True,
-                               nogit_ok=True,
-                               nogit_warning=True)
+        gittools.save_metadata(
+            metadata_file,
+            module=self.checked_modules,
+            dirty_warning=True,
+            dirty_ok=self.dirty_ok,
+            notag_warning=True,
+            nogit_ok=True,
+            nogit_warning=True,
+        )
 
     def save_metadata(self):
         """Save info on code version of modules used for the recording"""
@@ -222,18 +229,24 @@ class NumericalRecord(Record):
             print('WARNING --- No data types supplied. Graph not possible.')
             return
 
-        graph = NumericalGraph(names=self.numerical_recordings,
-                               data_types=self.data_types,
-                               legends=self.graph_legends,
-                               colors=self.graph_colors,
-                               linestyle=self.graph_linestyle,
-                               data_as_array=False)
+        graph = NumericalGraph(
+            names=self.numerical_recordings,
+            data_types=self.data_types,
+            legends=self.graph_legends,
+            colors=self.graph_colors,
+            linestyle=self.graph_linestyle,
+            data_as_array=False,
+        )
 
         # In case the queue contains other measurements than numerical
         # (e.g. images from cameras)
-        numerical_queues = [recording.queues['plotting']
-                            for recording in self.numerical_recordings.values()]
+        numerical_queues = [
+            recording.queues['plotting']
+            for recording in self.numerical_recordings.values()
+        ]
 
-        graph.run(queues=numerical_queues,
-                  external_stop=self.internal_stop,
-                  dt_graph=self.dt_graph)
+        graph.run(
+            queues=numerical_queues,
+            external_stop=self.internal_stop,
+            dt_graph=self.dt_graph,
+        )
