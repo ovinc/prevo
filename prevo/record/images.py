@@ -282,7 +282,14 @@ class ImageRecord(Record):
 
     def save_metadata(self):
         """Save sensor info and version of modules used"""
-        self._save_metadata(filename=self.metadata_filename)
+        try:
+            self._save_metadata(filename=self.metadata_filename)
+        except Exception as e:
+            # Since save_metadata is in a thread, it does not stop the main
+            # program when an exception is thrown. As a result, the line
+            # belows forces the program to stop when metadata saving fails.
+            print(f'ERROR in metadata saving: {e}. Stopping ...')
+            self.stop()
 
     def data_plot(self):
         """What to do when graph event is triggered"""

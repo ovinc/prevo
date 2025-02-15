@@ -28,6 +28,7 @@ from threading import Event, Thread
 from queue import Queue, Empty
 from traceback import print_exc
 import os
+import time
 
 # Non-standard imports
 from tqdm import tqdm
@@ -56,7 +57,7 @@ def try_func(function):
             print('\n')
             print('=' * nmax)
             # args is normally the object (self), will print its repr
-            print(f'ERROR in {function.__name__}() for {args}')
+            print(f'ERROR in {function.__name__}() for args={args}, kwargs={kwargs}')
             print_exc()
             print('=' * nmax)
             print('\n')
@@ -491,7 +492,31 @@ class RecordingBase(ABC):
     def data_read(self):
         """Read data from sensor and store it in data queues."""
 
-        with self.Sensor() as self.sensor:
+        # In order to avoid loosing a sensor at initialization, e.g. because
+        # the resource is already talking to another program, we try to
+        # instantiate the class several times
+        number_of_trials = 10
+        error = None
+        for n in range(number_of_trials):
+            try:
+                self.sensor = self.Sensor()
+            except Exception as e:
+                error = e
+                print(
+                    f"Error trying to instantiate sensor [{self.Sensor.name}]\n"
+                    f"(trial {n+1}/{number_of_trials}). Retrying in 1s ..."
+                )
+                time.sleep(1)
+            else:
+                print(f"Sensor [{self.Sensor.name}] finally instantiated!")
+                break
+        else:
+            raise RuntimeError(
+                f"Impossible to instantiate sensor [{self.Sensor.name}] "
+                f"after {n} trials, due to error: {error}"
+            )
+
+        with self.sensor:
             # Initial setting of properties is done here in case one of the
             # properties acts on the sensor object, which is not defined
             # before this point.
