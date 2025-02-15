@@ -500,7 +500,7 @@ class RecordingBase(ABC):
         for n in range(number_of_trials):
             # No need to continue trying if the program is stopped
             if not self.running:
-                break
+                return
             try:
                 self.sensor = self.Sensor()
             except Exception as e:
@@ -511,7 +511,8 @@ class RecordingBase(ABC):
                 )
                 time.sleep(1)
             else:
-                print(f"Sensor [{self.Sensor.name}] finally instantiated!")
+                if n > 0:
+                    print(f"Sensor [{self.Sensor.name}] finally instantiated!")
                 break
         else:
             raise RuntimeError(
@@ -767,9 +768,26 @@ class Record:
 
     # =========== Optional methods and attributes for subclassing ============
 
-    def save_metadata(self):
-        """Save experimental metadata. To be defined in subclass"""
+    def _save_metadata(self):
+        """Save experimental metadata ; define in subclasses"""
         pass
+
+    def save_metadata(self):
+        """Save experimental metadata.
+
+        self._save_metadata() needs to be defined in subclasses"""
+        try:
+            self._save_metadata()
+        except Exception as e:
+            # Since save_metadata is in a thread, it does not stop the main
+            # program when an exception is thrown. As a result, the line
+            # belows forces the program to stop when metadata saving fails.
+            print('\n-----------------------------------')
+            print(f'ERROR in metadata saving:\n{e}')
+            print('CLI still running but PROGRAM STOPPED')
+            print('--> PRESS Q TO EXIT')
+            print('-----------------------------------\n')
+            self.stop()
 
     def data_plot(self):
         """What to do with data when graph event is triggered"""

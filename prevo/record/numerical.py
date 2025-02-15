@@ -202,9 +202,9 @@ class NumericalRecord(Record):
             if issubclass(recording.__class__, NumericalRecording):
                 self.numerical_recordings[name] = recording
 
-    def _save_metadata(self, filename):
+    def _save_metadata(self):
         """To call save_metadata() with custom filenames"""
-        metadata_file = self.path / filename
+        metadata_file = self.path / self.metadata_filename
 
         if metadata_file.exists():
             metadata_file = increment_filename(metadata_file)
@@ -218,17 +218,6 @@ class NumericalRecord(Record):
             nogit_ok=True,
             nogit_warning=True,
         )
-
-    def save_metadata(self):
-        """Save info on code version of modules used for the recording"""
-        try:
-            self._save_metadata(filename=self.metadata_filename)
-        except Exception as e:
-            # Since save_metadata is in a thread, it does not stop the main
-            # program when an exception is thrown. As a result, the line
-            # belows forces the program to stop when metadata saving fails.
-            print(f'ERROR in metadata saving: {e}. Stopping ...')
-            self.stop()
 
     def data_plot(self):
         """What to do when graph event is triggered"""

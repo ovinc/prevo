@@ -249,9 +249,9 @@ class ImageRecord(Record):
             if issubclass(recording.__class__, ImageRecording):
                 self.image_recordings[name] = recording
 
-    def _save_metadata(self, filename):
+    def _save_metadata(self):
         """To be able to call save_metadata() with arbitrary filenames"""
-        metadata_file = self.path / filename
+        metadata_file = self.path / self.metadata_filename
 
         if metadata_file.exists():
             metadata_file = increment_filename(metadata_file)
@@ -279,21 +279,6 @@ class ImageRecord(Record):
             nogit_ok=True,
             nogit_warning=True,
         )
-
-    def save_metadata(self):
-        """Save sensor info and version of modules used"""
-        try:
-            self._save_metadata(filename=self.metadata_filename)
-        except Exception as e:
-            # Since save_metadata is in a thread, it does not stop the main
-            # program when an exception is thrown. As a result, the line
-            # belows forces the program to stop when metadata saving fails.
-            print('-------------------------------------------')
-            print(f'ERROR in metadata saving: {e}. Stopping ...')
-            print('CLI still running but PROGRAM STOPPED')
-            print('--> PRESS Q TO EXIT')
-            print('-------------------------------------------')
-            self.stop()
 
     def data_plot(self):
         """What to do when graph event is triggered"""
