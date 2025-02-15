@@ -498,6 +498,9 @@ class RecordingBase(ABC):
         number_of_trials = 10
         error = None
         for n in range(number_of_trials):
+            # No need to continue trying if the program is stopped
+            if not self.running:
+                break
             try:
                 self.sensor = self.Sensor()
             except Exception as e:

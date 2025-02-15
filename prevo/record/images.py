@@ -288,7 +288,11 @@ class ImageRecord(Record):
             # Since save_metadata is in a thread, it does not stop the main
             # program when an exception is thrown. As a result, the line
             # belows forces the program to stop when metadata saving fails.
+            print('-------------------------------------------')
             print(f'ERROR in metadata saving: {e}. Stopping ...')
+            print('CLI still running but PROGRAM STOPPED')
+            print('--> PRESS Q TO EXIT')
+            print('-------------------------------------------')
             self.stop()
 
     def data_plot(self):
