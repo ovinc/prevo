@@ -517,7 +517,7 @@ class RecordingBase(ABC):
         else:
             raise RuntimeError(
                 f"Impossible to instantiate sensor [{self.Sensor.name}] "
-                f"after {n} trials, due to error: {error}"
+                f"after {n + 1} trials, due to error:\n{error}"
             )
 
         with self.sensor:
