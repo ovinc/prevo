@@ -415,7 +415,7 @@ class GraphBase(ABC):
 
     def close(self):
         """Close matplotlib figure associated with graph"""
-        plt.close(self.graph.fig)
+        plt.close(self.fig)
 
 
 class UpdateGraph:
