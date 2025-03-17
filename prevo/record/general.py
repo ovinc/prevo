@@ -91,7 +91,7 @@ class SensorBase(ABC):
         # (optional) : specific sensor errors to catch, can be an Exception
         # class or an iterable of exceptions; if not specified in subclass,
         # any exception is caught.
-        self.exceptions = Exception
+        self.exceptions = ()
 
     def __enter__(self):
         """Context manager for sensor (enter). Optional."""
@@ -126,8 +126,8 @@ class SensorBase(ABC):
         """Read sensor and throw SensorError if measurement fails."""
         try:
             data = self._read()
-        except self.exceptions:
-            raise SensorError(f'Impossible to read {self.name} sensor')
+        except self.exceptions as e:
+            raise SensorError(f'Impossible to read {self.name} sensor: {e}')
         else:
             return data
 
