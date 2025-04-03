@@ -43,12 +43,11 @@ from .misc import PeriodicThreadedSystem
 class SavedDataBase(ABC):
     """Abstract base class for live measurements of sensors"""
 
-    def __init__(self, name, filename, path='.'):
+    def __init__(self, name, path):
         """Parameters:
         - name: name of sensor/recording
         """
         self.name = name
-        self.filename = filename
         self.path = Path(path)
         self.data = None
 
@@ -79,25 +78,9 @@ class SavedDataBase(ABC):
 class SavedCsvData(SavedDataBase):
     """Class managing saved measurements to CSV files (with pandas)"""
 
-    def __init__(
-        self,
-        name,
-        filename,
-        path='.',
-        csv_separator='\t',
-    ):
-
-        super().__init__(
-            name=name,
-            filename=filename,
-            path=path,
-        )
-
-        self.csv_file = CsvFile(
-            filename=self.filename,
-            path=self.path,
-            csv_separator=csv_separator,
-        )
+    def __init__(self, name, path, csv_separator='\t'):
+        super().__init__(name=name, path=path)
+        self.csv_file = CsvFile(path=self.path, csv_separator=csv_separator)
 
     def load(self, nrange=None):
         self.data = self.csv_file.load(nrange=nrange)

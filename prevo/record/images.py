@@ -20,6 +20,7 @@
 # If not, see <https://www.gnu.org/licenses/>
 
 
+# Non-standard
 import gittools
 import prevo
 
@@ -121,10 +122,9 @@ class ImageRecording(RecordingBase):
 
         # Here, file manager manages only the timestamp file, not the images
         self.file_manager = CsvFile(
-            filename=timestamp_filename,
+            path=self.path / timestamp_filename,
             column_names=column_names,
             column_formats=column_formats,
-            path=path,
             csv_separator=csv_separator,
         )
 
@@ -146,7 +146,7 @@ class ImageRecording(RecordingBase):
         # number of images already recorded when record is called
         # (e.g. due to previous recording interrupted and restared)
         # The with open creates the file if not exists yet.
-        with open(self.file_manager.file, 'a', encoding='utf8'):
+        with open(self.file_manager.path, 'a', encoding='utf8'):
             n_lines = self.file_manager.number_of_lines()
         self.num = n_lines - 1 if n_lines > 1 else 0
 

@@ -88,10 +88,9 @@ class NumericalRecording(RecordingBase):
         super().__init__(Sensor=Sensor, path=path, **kwargs)
 
         self.file_manager = CsvFile(
-            filename=filename,
+            path=self.path / filename,
             column_names=column_names,
             column_formats=column_formats,
-            path=path,
             csv_separator=csv_separator,
         )
 

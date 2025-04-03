@@ -562,7 +562,7 @@ class RecordingBase(ABC):
 
             # Open and close file at each cycle to be able to save periodically
             # and for other users/programs to access the data simultaneously
-            with open(self.file_manager.file, 'a', encoding='utf8') as file:
+            with open(self.file_manager.path, 'a', encoding='utf8') as file:
 
                 # Get all data from saving queue as long as the current
                 # iteration of the timer is still active.
@@ -599,13 +599,13 @@ class RecordingBase(ABC):
         print(f'Data buffer saving started for {self.name}')
 
         # The nested statements below, similarly to above, ensure that
-        # self.file_manager.file is opened and closed regularly to avoid
+        # self.file_manager.path is opened and closed regularly to avoid
         # loosing too much data if there is an error.
 
         with tqdm(total=saving_queue.qsize()) as pbar:
             while True:
                 try:
-                    with open(self.file_manager.file, 'a', encoding='utf8') as file:
+                    with open(self.file_manager.path, 'a', encoding='utf8') as file:
                         saving_timer.reset()
                         while not saving_timer.interval_exceeded:
                             measurement = saving_queue.get(timeout=self.dt_save)

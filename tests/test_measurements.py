@@ -14,18 +14,17 @@ import prevo
 from prevo.measurements import SavedCsvData
 
 
-datafolder = Path(prevo.__file__).parent / '..' / 'data/manip'
+DATAFOLDER = Path(prevo.__file__).parent / '..' / 'data/manip'
 
-t_column, dt_column = 'time (unix)', 'dt (s)'
+NAMES = 'P', 'T', 'B1'
 
-names = 'P', 'T', 'B1'
-filenames = {
+FILENAMES = {
     'P': 'Vacuum_Pressure.tsv',
     'T': 'Vacuum_Temperature.tsv',
     'B1': 'Vacuum_SourceBath.tsv',
 }
 
-meas_numbers = {'P': 22553, 'T': 11271, 'B1': 9883}
+MEAS_NUMBERS = {'P': 22553, 'T': 11271, 'B1': 9883}
 
 n = 8  # measurement line number to check when loading full file
 # (considering first data line is numbered 1)
@@ -39,12 +38,11 @@ LINES = {
     'B1': (1616490514.585, 0.091, 24.2640),
 }
 
-measP = SavedCsvData('P', filenames['P'], datafolder)
-measT = SavedCsvData('T', filenames['T'], path=datafolder)
+measP = SavedCsvData('P', DATAFOLDER / FILENAMES['P'])
+measT = SavedCsvData('T', path=DATAFOLDER / FILENAMES['T'])
 measB1 = SavedCsvData(
     name='B1',
-    filename=filenames['B1'],
-    path=datafolder,
+    path=DATAFOLDER / FILENAMES['B1'],
     csv_separator='\t',
 )
 
@@ -53,18 +51,18 @@ SAVED_DATA = {'P': measP, 'T': measT, 'B1': measB1}
 
 def test_number_of_measurements():  # test with a variety of call options
     ns = [sdata.number_of_measurements() for sdata in SAVED_DATA.values()]
-    assert ns == list(meas_numbers.values())
+    assert ns == list(MEAS_NUMBERS.values())
 
 
-@pytest.mark.parametrize('name', names)
+@pytest.mark.parametrize('name', NAMES)
 def test_load_full(name):             # test full loading of data from file
     sdata = SAVED_DATA[name]
     sdata.load()
-    assert len(sdata.data) == meas_numbers[name]
+    assert len(sdata.data) == MEAS_NUMBERS[name]
     assert tuple(sdata.data.loc[n - 1].round(decimals=4)) == LINES[name]
 
 
-@pytest.mark.parametrize('name', names)
+@pytest.mark.parametrize('name', NAMES)
 def test_load_partial(name):
     sdata = SAVED_DATA[name]
     sdata.load(nrange)  # test partial loading of data

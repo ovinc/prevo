@@ -34,10 +34,9 @@ class CsvFile:
 
     def __init__(
         self,
-        filename,
+        path,
         column_names=None,
         column_formats=None,
-        path='.',
         csv_separator='\t',
     ):
         """Init CsvFile object
@@ -45,8 +44,8 @@ class CsvFile:
         Parameters
         ----------
 
-        filename : str
-            name of file within path folder
+        path : {str, pathlib.Path}
+            path to file, including filename and extension
 
         column_names : {array_like[str], None}, optional
             (optional, for saving data): iterable of column names
@@ -61,7 +60,6 @@ class CsvFile:
             separator used to separate data in file
         """
         self.path = Path(path)
-        self.file = self.path / filename
         self.csv_separator = csv_separator
         self.column_names = column_names
         self.column_formats = column_formats
@@ -90,11 +88,11 @@ class CsvFile:
         else:
             n1, n2 = nrange
             kwargs = {'skiprows': range(1, n1), 'nrows': n2 - n1 + 1}
-        return pd.read_csv(self.file, delimiter=self.csv_separator, **kwargs)
+        return pd.read_csv(self.path, delimiter=self.csv_separator, **kwargs)
 
     def number_of_lines(self):
         """Return number of lines of a file"""
-        with open(self.file, 'r') as f:
+        with open(self.path, 'r') as f:
             for i, line in enumerate(f):
                 pass
             try:
@@ -131,7 +129,7 @@ class CsvFile:
 
     def init_file(self):
         """What to do with file when recording is started."""
-        with open(self.file, 'a', encoding='utf8') as file:
+        with open(self.path, 'a', encoding='utf8') as file:
             self._init_file(file)
 
 

@@ -21,7 +21,7 @@ def test_resample_simple():
     """Resampling of numerical data, default parameters"""
     resample_numerical_data(DATA_FILE, '30s', new_file=out_file_1)
     csv_file = CsvFile(out_file_1)
-    assert csv_file.file.exists()
+    assert csv_file.path.exists()
     assert csv_file.number_of_measurements() == 3758
 
 
@@ -35,5 +35,5 @@ def test_resample_advanced():
         new_file=out_file_2,
     )
     csv_file = CsvFile(out_file_2)
-    assert csv_file.file.exists()
+    assert csv_file.path.exists()
     assert csv_file.number_of_measurements() == 940
