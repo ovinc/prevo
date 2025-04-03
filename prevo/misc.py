@@ -111,12 +111,19 @@ class PeriodicThreadedSystem:
         precise=False,
         verbose=False,
     ):
-        """Parameters:
+        """Init periodic threaded system
 
-        - interval: update interval in seconds
-        - precise (bool): use the precise option in oclock.Timer
-        - verbose: if True, print indications in console when thread
-                   is started or stopped
+        Parameters
+        ----------
+        interval : float
+            update interval in seconds
+
+        precise : bool
+            if True, use the precise option in oclock.Timer
+
+        verbose : bool
+            if True, print indications in console when thread is started
+            or stopped
         """
         self.verbose = verbose
         self.timer = oclock.Timer(interval=interval, precise=precise)
@@ -192,10 +199,15 @@ class PeriodicSensor(PeriodicThreadedSystem):
 
         Parameters
         ----------
-        - interval: update interval in seconds
-        - precise (bool): use the precise option in oclock.Timer
-        - verbose: if True, print indications in console when thread
-                   is started or stopped
+        interval : float
+            update interval in seconds
+
+        precise : bool
+            if True, use the precise option in oclock.Timer
+
+        verbose : bool
+            if True, print indications in console when thread is started
+            or stopped
         """
         super().__init__(interval=interval, precise=precise, verbose=verbose)
         self.queue = Queue()

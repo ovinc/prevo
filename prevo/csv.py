@@ -40,13 +40,25 @@ class CsvFile:
         path='.',
         csv_separator='\t',
     ):
-        """Parameters:
+        """Init CsvFile object
 
-        - path: str or pathlib.Path object: folder in which file is located
-        - filename: name of file within path folder.
-        - csv_separator: separator (str) used to separate data in file
-        - column_names (optional, for saving data): iterable of column names
-        - column_formats (optional): iterable of str formatings of data in columns
+        Parameters
+        ----------
+
+        filename : str
+            name of file within path folder
+
+        column_names : {array_like[str], None}, optional
+            (optional, for saving data): iterable of column names
+
+        column_formats : {array_like[str], None}, optional
+            iterable of str formatings of data in columns
+
+        path : {str, pathlib.Path}, optional
+            folder in which file is located (default current folder)
+
+        csv_separator: str
+            separator used to separate data in file
         """
         self.path = Path(path)
         self.file = self.path / filename
@@ -60,24 +72,24 @@ class CsvFile:
     def load(self, nrange=None):
         """Load data recorded in path, possibly with a range of indices (n1, n2).
 
-        Input
-        -----
-        - nrange: select part of the data:
+        Parameters
+        ----------
+        nrange : {tuple[int], None}
+            select part of the data:
             - if nrange is None (default), load the whole file.
             - if nrange = (n1, n2), loads the file from line n1 to line n2,
               both n1 and n2 being included (first line of data is n=1).
 
-        Output
-        ------
-        Pandas DataFrame of the requested size.
+        Returns
+        -------
+        pandas.DataFrame
+            Pandas DataFrame of the requested size.
         """
         if nrange is None:
             kwargs = {}
         else:
             n1, n2 = nrange
-            kwargs = {'skiprows': range(1, n1),
-                      'nrows': n2 - n1 + 1}
-
+            kwargs = {'skiprows': range(1, n1), 'nrows': n2 - n1 + 1}
         return pd.read_csv(self.file, delimiter=self.csv_separator, **kwargs)
 
     def number_of_lines(self):
@@ -121,3 +133,53 @@ class CsvFile:
         """What to do with file when recording is started."""
         with open(self.file, 'a', encoding='utf8') as file:
             self._init_file(file)
+
+
+def resample_numerical_data(
+    old_file,
+    rule,
+    new_file=None,
+    sep='\t',
+    column_formats=None,
+):
+    """Resample data that has a 'time (unix)' column.
+
+    Takes data from the file and saves it into a new file.
+
+    Parameters
+    ----------
+    old_file : {str, pathlib.Path}
+        path to the old file containing the metadata
+
+    rule : str
+        pandas rule for resampling, e.g. "10s" for every 10 seconds
+
+    new_file : {str, pathlib.Path}, optional
+        if not supplied, use same name but with '_resampled' added in the name
+
+    sep : str, optional
+        separator used in the csv_file
+
+    column_formats : array_like[str]
+        iterable of f-string formatting of every column (including unix time)
+        e.g. ('.3f', '.6f', '.0f')
+        if None, use .3f for every column
+    """
+    data = pd.read_csv(old_file, sep=sep)
+
+    data['datetime'] = pd.to_datetime(data['time (unix)'], unit='s')
+    resampled_data = data.resample(rule=rule, on='datetime').mean()
+    new_data = resampled_data.reset_index().drop('datetime', axis=1)
+
+    if column_formats is not None:
+        for name, fmt in zip(new_data, column_formats):
+            new_data[name] = new_data[name].map(lambda x: f"{x:{fmt}}")
+        float_format = None
+    else:
+        float_format = "%.3f"
+
+    file = Path(old_file)
+    if new_file is None:
+        new_file = file.with_name(f"{file.stem}_resampled{file.suffix}")
+
+    new_data.to_csv(new_file, sep=sep, index=False, float_format=float_format)
