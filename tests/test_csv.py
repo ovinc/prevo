@@ -8,7 +8,7 @@ from pathlib import Path
 
 # local imports
 import prevo
-from prevo.csv import CsvFile, resample_numerical_data
+from prevo.csv import CsvFile, resample_csv
 
 
 DATAFOLDER = Path(prevo.__file__).parent / '..' / 'data'
@@ -19,7 +19,7 @@ out_file_2 = DATAFOLDER / 'untracked_data' / 'Pressure_resampled_2.tsv'
 
 def test_resample_simple():
     """Resampling of numerical data, default parameters"""
-    resample_numerical_data(DATA_FILE, '30s', new_file=out_file_1)
+    resample_csv(DATA_FILE, '30s', new_file=out_file_1)
     csv_file = CsvFile(out_file_1)
     assert csv_file.path.exists()
     assert csv_file.number_of_measurements() == 3758
@@ -28,7 +28,7 @@ def test_resample_simple():
 def test_resample_advanced():
     """Resampling of numerical data"""
 
-    resample_numerical_data(
+    resample_csv(
         DATA_FILE,
         '2min',
         column_formats=('.3f', '.3f', '.2f'),

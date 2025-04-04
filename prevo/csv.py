@@ -133,21 +133,40 @@ class CsvFile:
             self._init_file(file)
 
 
-def resample_numerical_data(
-    old_file,
+def resample_dataframe(df, rule):
+    """Resample pandas dataframe containing a 'time (unix)' column.
+
+    All other columns will be averaged.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        the data to resample
+
+    rule : str
+        pandas rule for resampling, e.g. "10s" for every 10 seconds
+    """
+    df['datetime'] = pd.to_datetime(df['time (unix)'], unit='s')
+    resampled_df = df.resample(rule=rule, on='datetime').mean()
+    df.drop('datetime', axis=1, inplace=True)  # in order to keep original df
+    return resampled_df.reset_index().drop('datetime', axis=1)
+
+
+def resample_csv(
+    file,
     rule,
     new_file=None,
     sep='\t',
     column_formats=None,
 ):
-    """Resample data that has a 'time (unix)' column.
+    """Resample data that has a 'time (unix)' column stored in csv file
 
     Takes data from the file and saves it into a new file.
 
     Parameters
     ----------
-    old_file : {str, pathlib.Path}
-        path to the old file containing the metadata
+    file : {str, pathlib.Path}
+        path to the file containing the data ; needs 'time (unix)' column
 
     rule : str
         pandas rule for resampling, e.g. "10s" for every 10 seconds
@@ -158,16 +177,14 @@ def resample_numerical_data(
     sep : str, optional
         separator used in the csv_file
 
-    column_formats : array_like[str]
+    column_formats : array_like[str], optional
         iterable of f-string formatting of every column (including unix time)
         e.g. ('.3f', '.6f', '.0f')
         if None, use .3f for every column
     """
-    data = pd.read_csv(old_file, sep=sep)
-
-    data['datetime'] = pd.to_datetime(data['time (unix)'], unit='s')
-    resampled_data = data.resample(rule=rule, on='datetime').mean()
-    new_data = resampled_data.reset_index().drop('datetime', axis=1)
+    file = Path(file)
+    data = pd.read_csv(file, sep=sep)
+    new_data = resample_dataframe(data, rule=rule)
 
     if column_formats is not None:
         for name, fmt in zip(new_data, column_formats):
@@ -176,7 +193,6 @@ def resample_numerical_data(
     else:
         float_format = "%.3f"
 
-    file = Path(old_file)
     if new_file is None:
         new_file = file.with_name(f"{file.stem}_resampled{file.suffix}")
 
