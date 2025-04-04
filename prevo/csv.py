@@ -133,7 +133,7 @@ class CsvFile:
             self._init_file(file)
 
 
-def resample_dataframe(df, rule):
+def resample_dataframe(df, rule, dropna=True):
     """Resample pandas dataframe containing a 'time (unix)' column.
 
     All other columns will be averaged.
@@ -145,11 +145,19 @@ def resample_dataframe(df, rule):
 
     rule : str
         pandas rule for resampling, e.g. "10s" for every 10 seconds
+
+    dropna : bool
+        if True (default), remove NaN values, e.g. if there is a time when
+        there is no data e.g. because there was no data around the required
+        time in the original file.
+        if False, keep NaN values in order to have a constantly spaced
+        time in the file.
     """
     df['datetime'] = pd.to_datetime(df['time (unix)'], unit='s')
     resampled_df = df.resample(rule=rule, on='datetime').mean()
     df.drop('datetime', axis=1, inplace=True)  # in order to keep original df
-    return resampled_df.reset_index().drop('datetime', axis=1)
+    new_df = resampled_df.reset_index().drop('datetime', axis=1)
+    return new_df.dropna() if dropna else new_df
 
 
 def resample_csv(
@@ -158,6 +166,7 @@ def resample_csv(
     new_file=None,
     sep='\t',
     column_formats=None,
+    dropna=True,
 ):
     """Resample data that has a 'time (unix)' column stored in csv file
 
@@ -181,6 +190,13 @@ def resample_csv(
         iterable of f-string formatting of every column (including unix time)
         e.g. ('.3f', '.6f', '.0f')
         if None, use .3f for every column
+
+    dropna : bool
+        if True (default), remove NaN values, e.g. if there is a time when
+        there is no data e.g. because there was no data around the required
+        time in the original file.
+        if False, keep NaN values in order to have a constantly spaced
+        time in the file.
     """
     file = Path(file)
     data = pd.read_csv(file, sep=sep)
