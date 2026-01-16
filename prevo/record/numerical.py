@@ -19,7 +19,6 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-
 # Non-standard imports
 import gittools
 import prevo
@@ -32,58 +31,34 @@ from ..misc import increment_filename
 
 
 class NumericalRecording(RecordingBase):
-    """Recording class that saves numerical sensor data to csv files."""
+    """Recording class for saving numerical sensor data to CSV files."""
 
     def __init__(
         self,
         Sensor,
         filename,
-        path='.',
+        path=".",
         column_names=None,
         column_formats=None,
-        csv_separator='\t',
+        csv_separator="\t",
         **kwargs,
     ):
-        """Init NumericalRecording object.
+        """Initialize a NumericalRecording object.
 
         Parameters
         ----------
-        - Sensor: subclass of SensorBase.
-        - filename: name of csv/tsv file in which data will be saved.
-        - column_names: iterable of str (name of columns in csv file)
-        - column_formats: iterable of str (optional, str formatting)
-        - csv_separator: character to separate columns in CSV file.
-
-        Additional kwargs from RecordingBase:
-        - path: directory in which csv/tsv file will be created.
-        - dt: time interval between readings (default 1s).
-        - ctrl_ppties: optional iterable of properties (ControlledProperty
-                       objects) to control on the recording in addition to
-                       default ones (time interval and active on/off)
-        - active: if False, do not read data until self.active set to True.
-        - saving: if False, do not save data to file until self.saving set to
-                  True (note: data acquired during periods with saving=False
-                  will not be saved later. This happens e.g. when one just
-                  want to plot data without saving it).
-        - continuous: if True, take data as fast as possible from sensor.
-        - warnings: if True, print warnings of Timer (e.g. loop too short).
-        - precise: if True, use precise timer in oclock (see oclock.Timer).
-        - immediate: if False, changes in the timer (e.g interval) occur
-                     at the next timestep. If True, a new data point is
-                     taken immediately.
-        - programs: iterable of programs, which are object of the
-                    prevo.control.Program class or subclasses.
-                    --> optional pre-defined temporal pattern of change of
-                    properties of recording (e.g. define some times during
-                    which sensor is active or not, or change time interval
-                    between data points after some time, etc.)
-        - control_params: dict {command: kwargs} containing any kwargs to pass
-                          to the program controls (e.g. dt, range_limits, etc.)
-                          Note: if None, use default params
-                          (see RecordingControl class)
-        - dt_save: how often (in seconds) queues are checked and written to files
-                   (it is also how often files are open/closed)
-        - dt_check: time interval (in seconds) for checking queue sizes.
+        Sensor : subclass of SensorBase
+            Sensor class responsible for capturing numerical data.
+        filename : str
+            Name of the CSV/TSV file where data will be saved.
+        path : str, default="."
+            Directory where the CSV/TSV file will be created.
+        column_names : iterable of str, optional
+            Names of the columns in the CSV file.
+        column_formats : iterable of str, optional
+            Optional string formatting for each column in the CSV file.
+        csv_separator : str, default="\t"
+            Character used to separate columns in the CSV
         """
         super().__init__(Sensor=Sensor, path=path, **kwargs)
 
@@ -107,78 +82,90 @@ class NumericalRecording(RecordingBase):
         if measurement is None:
             return
         # Adding the name is useful e.g. for plotting.
-        measurement['name'] = self.name
+        measurement["name"] = self.name
         return measurement
 
     def save(self, measurement, file):
-        """Save to file
+        """Save measurement data to a file.
 
-        Inputs
-        ------
-        - measurement: Measurement object
-        - file:
+        Parameters
+        ----------
+        measurement : Measurement object
+            Measurement object to be saved. Assumed to be a dictionary with keys:
+            'time (unix)', 'dt (s)', and 'values'.
+        file : file-like object
+            File object where the data will be saved.
 
-        Output
-        ------
-        Iterable of data to be saved in CSV file
+        Returns
+        -------
+        iterable
+            Iterable of data to be saved in the CSV file. The length of the iterable
+            must match the length of `column_names`.
 
-        The length of the iterable must be equal to that of column_names.
-
-        Here, we assume a standard measurement as a dict with keys
-        'time (unix)', 'dt (s)', 'values'
-
-        Can be redefined in subclasses.
-        NOTE: if measurement is None, Record.data_save() does not save the data
+        Notes
+        -----
+        - Can be redefined in subclasses for custom behavior.
+        - If `measurement` is None, `Record.data_save()` will not save the data.
         """
-        time_info = (measurement['time (unix)'], measurement['dt (s)'])
-        value_info = measurement['values']
+        time_info = (measurement["time (unix)"], measurement["dt (s)"])
+        value_info = measurement["values"]
         self.file_manager._write_line(time_info + value_info, file=file)
 
 
 class NumericalRecord(Record):
-    """Class managing simultaneous temporal recordings of numerical sensors"""
+    """Class for managing simultaneous temporal recordings of numerical sensors."""
 
     def __init__(
         self,
         recordings,
-        metadata_filename='Numerical_Metadata.json',
+        metadata_filename="Numerical_Metadata.json",
         checked_modules=(),
         data_types=None,
         dt_graph=0.1,
         graph_legends=None,
         graph_colors=None,
-        graph_linestyle='.',
+        graph_linestyle=".",
         dirty_ok=True,
         **kwargs,
     ):
-        """Init NumericalRecord object.
+        """Initialize a NumericalRecord object.
 
         Parameters
         ----------
-        - recordings: iterable of recording objects (RecordingBase or subclass)
-        - metadata_filename: name of .json file in which metadata is saved
-        - checked_modules: iterable of python modules, the version of which
-                           will be saved in metadata, in addition to prevo.
-        - data_types: iterable of data types (for selecting window in which
-                      which to plot data when graphs are active);
-                      if not supplied, graphs can not be instantiated.
-        - dt_graph: time interval to refresh numerical graph.
-        - graph_colors: dict of graph colors for numerical graph
-                        (see prevo.plot)
-        - graph_legends: dict of graph legends for numerical graph
-                         (see prevo.plot)
-        - graph_linestyle: linestyle of data on numerical graph (e.g. '.-')
-        - dirty_ok: if False, record cannot be started if git repositories are
-                    not clean (commited).
+        recordings : iterable
+            Iterable of recording objects (RecordingBase or its subclasses).
+        metadata_filename : str, default="Numerical_Metadata.json"
+            Name of the JSON file where metadata will be saved.
+        checked_modules : iterable, optional
+            Iterable of Python modules whose versions will be saved in the
+            metadata, in addition to the `prevo` module.
+        data_types : iterable, optional
+            Iterable of data types for selecting the window in which to plot
+            data when graphs are active. If not supplied, graphs cannot be
+            instantiated.
+        dt_graph : float, default=0.1
+            Time interval (in seconds) to refresh the numerical graph.
+        graph_colors : dict, optional
+            Dictionary of graph colors for the numerical graph (see `prevo.plot`).
+        graph_legends : dict, optional
+            Dictionary of graph legends for the numerical graph (see `prevo.plot`).
+        graph_linestyle : str, default="."
+            Linestyle of data on the numerical graph (e.g., '.-').
+        dirty_ok : bool, default=True
+            If False, the recording cannot be started if Git repositories are
+            not clean (uncommitted changes).
 
-        Additional kwargs from RecordBase:
-        - path: directory in which data is recorded.
-        - on_start: optional iterable of objects with a .start() or .run()
-                    method, that need to be started at the same time as
-                    Record.start().
-                    Note: for now, start() and run() need to be non-blocking.
-        - dt_request: time interval (in seconds) for checking user requests
-                      (e.g. graph pop-up)
+        **kwargs : dict, optional
+            Additional keyword arguments inherited from Record:
+            path : str, default="."
+                Directory where recorded data will be saved.
+            on_start : iterable, optional
+                Iterable of objects with `.start()` or `.run()` methods. These
+                methods are called when `Record.start()` is invoked. Note:
+                `.start()` and `.run()` must be non-blocking.
+            dt_request : float, default=0.7
+                Time interval (in seconds) for checking user requests, such as
+                graph pop-ups.
         """
         super().__init__(recordings=recordings, **kwargs)
         self.metadata_filename = metadata_filename
@@ -221,7 +208,7 @@ class NumericalRecord(Record):
     def data_plot(self):
         """What to do when graph event is triggered"""
         if self.data_types is None:
-            print('WARNING --- No data types supplied. Graph not possible.')
+            print("WARNING --- No data types supplied. Graph not possible.")
             return
 
         graph = NumericalGraph(
@@ -236,7 +223,7 @@ class NumericalRecord(Record):
         # In case the queue contains other measurements than numerical
         # (e.g. images from cameras)
         numerical_queues = [
-            recording.queues['plotting']
+            recording.queues["plotting"]
             for recording in self.numerical_recordings.values()
         ]
 

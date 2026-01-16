@@ -381,8 +381,10 @@ class GraphBase(ABC):
         time_converters = {
             "datetime": self.measurement_formatter.to_datetime_datetime,
             "numpy": self.measurement_formatter.to_datetime_numpy,
-            "pandas": self.measurement_formatter.to_datetime_pandas,
         }
+        
+        if pandas_available:
+            time_converters["pandas"] = self.measurement_formatter.to_datetime_pandas
 
         self.time_converters = {}
         for name in self.names:
@@ -408,7 +410,7 @@ class GraphBase(ABC):
         ----------
         queues : iterable
             Iterable of queues to read data from.
-        external_stop : optional
+        external_stop : threading.Event, optional
             External stop request. If set, closes the figure.
         dt_graph : float, default=0.1
             Time interval (in seconds) to update the graph.
@@ -474,7 +476,7 @@ class UpdateGraph:
         if self.internal_stop.is_set():
             return
 
-        if self.external_stop and self.external_stop.is_set():
+        if self.external_stop is not None and self.external_stop.is_set():
             self.stop()
             self.graph.close()
 

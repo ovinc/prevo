@@ -19,7 +19,6 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-
 # Standard library imports
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -44,8 +43,8 @@ from ..misc import mode_to_names
 
 def try_func(function):
     """Decorator to make functions return & print errors if errors occur"""
-    def wrapper(*args, **kwargs):
 
+    def wrapper(*args, **kwargs):
         try:
             function(*args, **kwargs)
 
@@ -54,13 +53,13 @@ def try_func(function):
                 nmax, _ = os.get_terminal_size()
             except OSError:
                 nmax = 79
-            print('\n')
-            print('=' * nmax)
+            print("\n")
+            print("=" * nmax)
             # args is normally the object (self), will print its repr
-            print(f'ERROR in {function.__name__}() for args={args}, kwargs={kwargs}')
+            print(f"ERROR in {function.__name__}() for args={args}, kwargs={kwargs}")
             print_exc()
-            print('=' * nmax)
-            print('\n')
+            print("=" * nmax)
+            print("\n")
             return
 
     return wrapper
@@ -113,7 +112,7 @@ class SensorBase(ABC):
         Either this method or _get_data() must be defined in subclasses.
         """
         with oclock.measure_time() as data:
-            data['values'] = self._get_data()
+            data["values"] = self._get_data()
         return data
 
     def _get_data(self):
@@ -127,7 +126,7 @@ class SensorBase(ABC):
         try:
             data = self._read()
         except self.exceptions as e:
-            raise SensorError(f'Impossible to read {self.name} sensor: {e}')
+            raise SensorError(f"Impossible to read {self.name} sensor: {e}")
         else:
             return data
 
@@ -138,21 +137,21 @@ class SensorBase(ABC):
 
 
 timer_ppty = ControlledProperty(
-    attribute='interval',
-    readable='Δt (s)',
-    commands=('dt',),
+    attribute="interval",
+    readable="Δt (s)",
+    commands=("dt",),
 )
 
 active_ppty = ControlledProperty(
-    attribute='active',
-    readable='Rec. ON',
-    commands=('on',),
+    attribute="active",
+    readable="Rec. ON",
+    commands=("on",),
 )
 
 saving_ppty = ControlledProperty(
-    attribute='saving',
-    readable='Sav. ON',
-    commands=('save',),
+    attribute="saving",
+    readable="Sav. ON",
+    commands=("save",),
 )
 
 
@@ -169,7 +168,7 @@ class RecordingBase(ABC):
     def __init__(
         self,
         Sensor,
-        path='.',
+        path=".",
         dt=1,
         ctrl_ppties=(),
         active=True,
@@ -183,41 +182,45 @@ class RecordingBase(ABC):
         dt_save=1.3,
         dt_check=0.9,
     ):
-        """Init Recording object.
+        """Initialize a Recording object.
 
         Parameters
         ----------
-
-        - Sensor: subclass of SensorBase.
-        - path: directory in which data is recorded.
-        - dt: time interval between readings (default 1s).
-        - ctrl_ppties: optional iterable of properties (ControlledProperty
-                       objects) to control on the recording in addition to
-                       default ones (time interval and active on/off)
-        - active: if False, do not read data until self.active set to True.
-        - saving: if False, do not save data to file until self.saving set to
-                  True (note: data acquired during periods with saving=False
-                  will not be saved later. This happens e.g. when one just
-                  want to plot data without saving it).
-        - continuous: if True, take data as fast as possible from sensor.
-        - warnings: if True, print warnings of Timer (e.g. loop too short).
-        - precise: if True, use precise timer in oclock (see oclock.Timer).
-        - immediate: if False, changes in the timer (e.g interval) occur
-                     at the next timestep. If True, a new data point is
-                     taken immediately.
-        - programs: iterable of programs, which are object of the
-                    prevo.control.Program class or subclasses.
-                    --> optional pre-defined temporal pattern of change of
-                    properties of recording (e.g. define some times during
-                    which sensor is active or not, or change time interval
-                    between data points after some time, etc.)
-        - control_params: dict {command: kwargs} containing any kwargs to pass
-                          to the program controls (e.g. dt, range_limits, etc.)
-                          Note: if None, use default params
-                          (see RecordingControl class)
-        - dt_save: how often (in seconds) queues are checked and written to files
-                   (it is also how often files are open/closed)
-        - dt_check: time interval (in seconds) for checking queue sizes.
+        Sensor : subclass of SensorBase
+            Sensor class to record data from.
+        path : str, default="."
+            Directory where data will be recorded.
+        dt : float, default=1
+            Time interval (in seconds) between sensor readings.
+        ctrl_ppties : iterable, optional
+            Iterable of ControlledProperty objects to control during recording,
+            in addition to default properties (time interval and active on/off).
+        active : bool, default=True
+            If False, data reading is disabled until `self.active` is set to True.
+        saving : bool, default=True
+            If False, data will not be saved to file until `self.saving` is set
+            to True. Data acquired while `saving=False` will not be saved later.
+        continuous : bool, default=False
+            If True, data is acquired as fast as possible from the sensor.
+        warnings : bool, default=False
+            If True, print warnings from the Timer (e.g., loop too short).
+        precise : bool, default=False
+            If True, use a precise timer in `oclock` (see `oclock.Timer`).
+        immediate : bool, default=True
+            If False, changes to the timer (e.g., interval) occur at the next
+            timestep. If True, a new data point is taken immediately.
+        programs : iterable, optional
+            Iterable of Program objects (or subclasses) for predefined temporal
+            patterns of property changes (e.g., activate/deactivate sensor at
+            specific times).
+        control_params : dict, optional
+            Dictionary of `{command: kwargs}` to pass to program controls
+            (e.g., `dt`, `range_limits`). If None, default parameters are used
+            (see `RecordingControl` class).
+        dt_save : float, default=1.3
+            Time interval (in seconds) for writing queues to files.
+        dt_check : float, default=0.9
+            Time interval (in seconds) for checking queue sizes.
         """
         self.Sensor = Sensor
         self.name = Sensor.name
@@ -237,20 +240,22 @@ class RecordingBase(ABC):
 
         # Queues in which data is put (NEED to be defined before self.saving)
         self.queues = {
-            'saving': Queue(),
-            'plotting': Queue(),
+            "saving": Queue(),
+            "plotting": Queue(),
         }
         # Events that need to be set to put data in each data queue
         self.queue_events = {
-            'saving': Event(),
-            'plotting': Event(),
+            "saving": Event(),
+            "plotting": Event(),
         }
 
         # NOTE: DO NOT change to self.active = active because this can cause
         # problems upon init of the recording when self.sensor is not defined
         # yet, if the active setter uses properties of the sensor (e.g. to
         # turn it on or off)
-        self._active = active  # can be set to False to temporarily stop recording from sensor
+        self._active = (
+            active  # can be set to False to temporarily stop recording from sensor
+        )
 
         # NOTE: Here, KEEP saving instead of _saving because one needs to
         # not only set the status but also activate the queues, etc.
@@ -293,7 +298,7 @@ class RecordingBase(ABC):
         self.internal_stop = Event()
 
     def __repr__(self):
-        return f'{self.__class__.__name__} ({self.name})'
+        return f"{self.__class__.__name__} ({self.name})"
 
     @property
     def active(self):
@@ -314,9 +319,9 @@ class RecordingBase(ABC):
     def saving(self, value):
         self._saving = value
         if self._saving:
-            self.activate_queue('saving')
+            self.activate_queue("saving")
         else:
-            self.deactivate_queue('saving')
+            self.deactivate_queue("saving")
 
     @property
     def interval(self):
@@ -345,7 +350,7 @@ class RecordingBase(ABC):
 
     def _add_sensor_controlled_properties(self):
         for ppty in self.Sensor.controlled_properties:
-            new_attribute = 'sensor.' + ppty.attribute
+            new_attribute = "sensor." + ppty.attribute
             new_ppty = ControlledProperty(
                 attribute=new_attribute,
                 readable=ppty.readable,
@@ -363,7 +368,6 @@ class RecordingBase(ABC):
     def _init_programs(self, programs, control_params):
         self.programs = ()
         for supplied_program in programs:
-
             # In case same program is supplied to different recordings,
             # because a program object cannot be run several times in parallel.
             program = supplied_program.copy()
@@ -374,7 +378,7 @@ class RecordingBase(ABC):
                 control_kwargs = control_params.get(ppty_cmd, {})
             else:
                 control_kwargs = {}
-            log_filename = f'Control_Log_{self.name}_[{ppty.readable}].txt'
+            log_filename = f"Control_Log_{self.name}_[{ppty.readable}].txt"
             program.control = RecordingControl(
                 recording=self,
                 ppty=ppty,
@@ -399,9 +403,11 @@ class RecordingBase(ABC):
             return
         try:
             # avoids having to pass a convert function
-            exec(f'self.{ppty.attribute} = {value}')
+            exec(f"self.{ppty.attribute} = {value}")
         except Exception as e:
-            print(f"WARNING: Could not set {ppty.readable} for {self.name} to {value}.\n Exception: {e}")
+            print(
+                f"WARNING: Could not set {ppty.readable} for {self.name} to {value}.\n Exception: {e}"
+            )
 
     # Compulsory methods / properties to subclass ----------------------------
 
@@ -433,11 +439,11 @@ class RecordingBase(ABC):
 
     def print_info_on_failed_reading(self, status):
         """Displays relevant info when reading fails."""
-        t_str = datetime.now().isoformat(sep=' ', timespec='seconds')
-        if status == 'failed':
-            print(f'{self.name} reading failed ({t_str}). Retrying ...')
-        elif status == 'resumed':
-            print(f'{self.name} reading resumed ({t_str}).')
+        t_str = datetime.now().isoformat(sep=" ", timespec="seconds")
+        if status == "failed":
+            print(f"{self.name} reading failed ({t_str}). Retrying ...")
+        elif status == "resumed":
+            print(f"{self.name} reading resumed ({t_str}).")
 
     # ======================= Data reading from sensor =======================
 
@@ -452,7 +458,6 @@ class RecordingBase(ABC):
         self.timer.reset()
 
         while not self.internal_stop.is_set():
-
             if not self.active:
                 if not self.continuous:
                     # to avoid checking too frequently if active or not.
@@ -466,19 +471,21 @@ class RecordingBase(ABC):
             except SensorError:
                 print_exc()
                 if not failed_reading:  # means it has not failed just before
-                    self.print_info_on_failed_reading('failed')
+                    self.print_info_on_failed_reading("failed")
                 failed_reading = True
 
             # Measurement is OK ..............................................
             else:
-                if failed_reading:      # means it has failed just before
-                    self.print_info_on_failed_reading('resumed')
+                if failed_reading:  # means it has failed just before
+                    self.print_info_on_failed_reading("resumed")
                     failed_reading = False
 
                 measurement = self.format_measurement(data)
                 self.after_measurement()
 
-                for queue, event in zip(self.queues.values(), self.queue_events.values()):
+                for queue, event in zip(
+                    self.queues.values(), self.queue_events.values()
+                ):
                     if event.is_set():
                         queue.put(measurement)
 
@@ -507,7 +514,7 @@ class RecordingBase(ABC):
                 error = e
                 print(
                     f"Error trying to instantiate sensor [{self.Sensor.name}]\n"
-                    f"(trial {n+1}/{number_of_trials}). Retrying in 1s ..."
+                    f"(trial {n + 1}/{number_of_trials}). Retrying in 1s ..."
                 )
                 time.sleep(1)
             else:
@@ -538,32 +545,36 @@ class RecordingBase(ABC):
                 self.save(measurement, file)
             except Exception as e:
                 error = True
-                print(f'Error saving {measurement} for {self.name}: {e}. '
-                      f'Attempt {attempt + 1}/{attempts}')
+                print(
+                    f"Error saving {measurement} for {self.name}: {e}. "
+                    f"Attempt {attempt + 1}/{attempts}"
+                )
             else:
                 if error:
-                    print(f'Success saving {measurement} for {self.name} '
-                          f'at attempt {attempt + 1}')
+                    print(
+                        f"Success saving {measurement} for {self.name} "
+                        f"at attempt {attempt + 1}"
+                    )
                 return
         else:
-            print(f'Impossible saving {measurement} for {self.name}; '
-                  'will be missing from data')
+            print(
+                f"Impossible saving {measurement} for {self.name}; "
+                "will be missing from data"
+            )
 
     @try_func
     def data_save(self):
         """Save data that is stored in a queue by data_read."""
 
-        saving_queue = self.queues['saving']
+        saving_queue = self.queues["saving"]
         saving_timer = oclock.Timer(interval=self.dt_save)
 
         self.file_manager.init_file()
 
         while not self.internal_stop.is_set():
-
             # Open and close file at each cycle to be able to save periodically
             # and for other users/programs to access the data simultaneously
-            with open(self.file_manager.path, 'a', encoding='utf8') as file:
-
+            with open(self.file_manager.path, "a", encoding="utf8") as file:
                 # Get all data from saving queue as long as the current
                 # iteration of the timer is still active.
                 # - If there is not a lot of data to save, the while loop will
@@ -574,7 +585,6 @@ class RecordingBase(ABC):
                 #   while loop will exit, thus forcing the saving file to be
                 #   closed and re-opened.
                 while not saving_timer.interval_exceeded:
-
                     try:
                         measurement = saving_queue.get(timeout=self.dt_save)
                     except Empty:
@@ -596,7 +606,7 @@ class RecordingBase(ABC):
         if not saving_queue.qsize():
             return
 
-        print(f'Data buffer saving started for {self.name}')
+        print(f"Data buffer saving started for {self.name}")
 
         # The nested statements below, similarly to above, ensure that
         # self.file_manager.path is opened and closed regularly to avoid
@@ -605,7 +615,7 @@ class RecordingBase(ABC):
         with tqdm(total=saving_queue.qsize()) as pbar:
             while True:
                 try:
-                    with open(self.file_manager.path, 'a', encoding='utf8') as file:
+                    with open(self.file_manager.path, "a", encoding="utf8") as file:
                         saving_timer.reset()
                         while not saving_timer.interval_exceeded:
                             measurement = saving_queue.get(timeout=self.dt_save)
@@ -614,24 +624,26 @@ class RecordingBase(ABC):
                 except Empty:
                     break
 
-        print(f'Data buffer saving finished for {self.name}')
+        print(f"Data buffer saving finished for {self.name}")
 
     # ========================== Check queue sizes ===========================
 
     def _check_queue_size(self, queue, q_size_over, q_type):
         """Check that queue does not go beyond specified limits"""
         for qmax in self.queue_warning_limits:
-
             if queue.qsize() > qmax:
                 if not q_size_over[qmax]:
-                    print(f'\nWARNING: {q_type} buffer size for {self.name}'
-                          f'over {int(qmax)} elements')
+                    print(
+                        f"\nWARNING: {q_type} buffer size for {self.name}"
+                        f"over {int(qmax)} elements"
+                    )
                     q_size_over[qmax] = True
 
             if queue.qsize() <= qmax:
                 if q_size_over[qmax]:
-                    print(f'\n{q_type} buffer size now below {int(qmax)}'
-                          f'for {self.name}')
+                    print(
+                        f"\n{q_type} buffer size now below {int(qmax)}for {self.name}"
+                    )
                     q_size_over[qmax] = False
 
     @try_func
@@ -649,12 +661,9 @@ class RecordingBase(ABC):
         # Check periodically -------------------------------------------------
 
         while not self.internal_stop.is_set():
-
             for queue_name, queue in self.queues.items():
-
                 # No need to check if queue is not active
                 if self.queue_events[queue_name].is_set():
-
                     self._check_queue_size(
                         queue=queue,
                         q_size_over=self.q_size_over[queue_name],
@@ -699,7 +708,7 @@ class RecordingBase(ABC):
         # threads are in try_func decorator, but it's safe to catch
         # anything that might go wrong.
         except (Exception, KeyboardInterrupt):
-            print(f'Error for {self.name}. Stopping recording.')
+            print(f"Error for {self.name}. Stopping recording.")
             print_exc()
             self.stop()
 
@@ -732,22 +741,25 @@ class Record:
     def __init__(
         self,
         recordings,
-        path='.',
+        path=".",
         on_start=(),
         dt_request=0.7,
     ):
-        """Init base class for recording data
+        """Initialize the base class for recording data asynchronously.
 
         Parameters
         ----------
-        - recordings: iterable of recording objects (RecordingBase or subclass)
-        - path: directory in which data is recorded.
-        - on_start: optional iterable of objects with a .start() or .run()
-                    method, that need to be started at the same time as
-                    Record.start().
-                    Note: for now, start() and run() need to be non-blocking.
-        - dt_request: time interval (in seconds) for checking user requests
-                      (e.g. graph pop-up)
+        recordings : iterable
+            Iterable of recording objects (RecordingBase or its subclasses).
+        path : str, default="."
+            Directory where recorded data will be saved.
+        on_start : iterable, optional
+            Iterable of objects with a `.start()` or `.run()` method. These
+            methods are called when `Record.start()` is invoked. Note: `.start()`
+            and `.run()` must be non-blocking.
+        dt_request : float, default=0.7
+            Time interval (in seconds) for checking user requests, such as
+            graph pop-ups.
         """
         self.recordings = {rec.name: rec for rec in recordings}
         self.create_events()
@@ -764,7 +776,7 @@ class Record:
         self.additional_threads = []
 
     def __repr__(self):
-        return f'Record object ({self.__class__.__name__})'
+        return f"Record object ({self.__class__.__name__})"
 
     # =========== Optional methods and attributes for subclassing ============
 
@@ -782,11 +794,11 @@ class Record:
             # Since save_metadata is in a thread, it does not stop the main
             # program when an exception is thrown. As a result, the line
             # belows forces the program to stop when metadata saving fails.
-            print('\n-----------------------------------')
-            print(f'ERROR in metadata saving:\n{e}')
-            print('CLI still running but PROGRAM STOPPED')
-            print('--> PRESS Q TO EXIT')
-            print('-----------------------------------\n')
+            print("\n-----------------------------------")
+            print(f"ERROR in metadata saving:\n{e}")
+            print("CLI still running but PROGRAM STOPPED")
+            print("--> PRESS Q TO EXIT")
+            print("-----------------------------------\n")
             self.stop()
 
     def data_plot(self):
@@ -798,18 +810,20 @@ class Record:
     def create_events(self):
         """Create event objects managed by the CLI"""
         self.internal_stop = Event()  # event set to stop recording when needed.
-        self.graph_request = Event()  # event set to start plotting the data in real time
+        self.graph_request = (
+            Event()
+        )  # event set to start plotting the data in real time
 
         graph_event = ControlledEvent(
             event=self.graph_request,
-            readable='graph',
-            commands=('g', 'graph'),
+            readable="graph",
+            commands=("g", "graph"),
         )
 
         stop_event = ControlledEvent(
             event=self.internal_stop,
-            readable='stop',
-            commands=('q', 'Q', 'quit'),
+            readable="stop",
+            commands=("q", "Q", "quit"),
         )
 
         self.controlled_events = graph_event, stop_event
@@ -830,8 +844,8 @@ class Record:
 
         for cmd, value in ppty_kwargs.items():
             try:
-                ppty_cmd, name = cmd.split('_', maxsplit=1)  # e.g. dt_P = 10
-            except ValueError:                               # e.g. dt=10
+                ppty_cmd, name = cmd.split("_", maxsplit=1)  # e.g. dt_P = 10
+            except ValueError:  # e.g. dt=10
                 global_commands[cmd] = value
             else:
                 specific_commands[name] = ppty_cmd, value
@@ -852,7 +866,7 @@ class Record:
     def start_supplied_objects(self):
         """Start user-supplied non-blocking objects with a start() or run() method."""
         for obj in self.on_start:
-            for method in 'run', 'start':
+            for method in "run", "start":
                 try:
                     getattr(obj, method)()
                 except AttributeError:
@@ -860,19 +874,22 @@ class Record:
                 else:
                     break
             else:
-                print(f'WARNING - {obj.__class__.__name} does not have a'
-                      f'run() or start() method --> not started. ')
+                print(
+                    f"WARNING - {obj.__class__.__name} does not have a"
+                    f"run() or start() method --> not started. "
+                )
 
     def start(self, **ppty_kwargs):
-        """Start recording.
+        """Start the recording process.
 
         Parameters
         ----------
-        - ppty_kwargs: optional initial setting of properties.
-                     (example dt=10 for changing all time intervals to 10
-                      or dt_P=60 to change only time interval of recording 'P')
+        **ppty_kwargs : dict, optional
+            Optional initial settings for properties. For example, use `dt=10` to
+            change all time intervals to 10, or `dt_P=60` to change only the time
+            interval of recording 'P'.
         """
-        print(f'Recording started in folder {self.path.resolve()}')
+        print(f"Recording started in folder {self.path.resolve()}")
 
         error_occurred = False
         self.threads = []
@@ -912,15 +929,14 @@ class Record:
 
         except Exception:
             error_occurred = True
-            print('\nERROR during asynchronous Record. \n Stopping ... \n')
+            print("\nERROR during asynchronous Record. \n Stopping ... \n")
             print_exc()
 
         except KeyboardInterrupt:
             error_occurred = True
-            print('\nManual interrupt by Ctrl-C event.\n Stopping ...\n')
+            print("\nManual interrupt by Ctrl-C event.\n Stopping ...\n")
 
         finally:
-
             self.stop()
             for recording in self.recordings.values():
                 recording.stop()
@@ -942,7 +958,7 @@ class Record:
                     print('\nIMPORTANT: CLI still running. Input "q" to stop.\n')
                 self.cli_thread.join()
 
-            print('Recording Stopped')
+            print("Recording Stopped")
 
     def stop(self):
         self.internal_stop.set()
@@ -959,24 +975,22 @@ class Record:
             command_input.run()
         else:
             self.internal_stop.set()
-            raise ValueError('No recordings provided. Stopping ...')
+            raise ValueError("No recordings provided. Stopping ...")
 
     @try_func
     def data_graph(self):
         """Manage requests of real-time plotting of data during recording."""
 
         while not self.internal_stop.is_set():
-
             if self.graph_request.is_set():
-
                 for recording in self.recordings.values():
-                    recording.activate_queue('plotting')
+                    recording.activate_queue("plotting")
 
                 self.data_plot()  # Blocking (defined in subclasses)
 
                 self.graph_request.clear()
                 for recording in self.recordings.values():
-                    recording.deactivate_queue('plotting')
+                    recording.deactivate_queue("plotting")
 
             self.internal_stop.wait(self.dt_request)
 
@@ -992,37 +1006,42 @@ class Record:
         recording_kwargs=None,
         programs=None,
         control_params=None,
-        path='.',
+        path=".",
         **kwargs,
     ):
-        """Factory method to generate a Record object from sensor names etc.
+        """Factory method to generate a Record object from sensor names and types.
 
         Parameters
         ----------
-        - mode (default: all sensors): sensor names in any order (e.g. 'PTB1')
-               and potentially with separators (e.g. 'P-T-B1')
-        - sensors: iterable of all sensor classes [Sensor1, Sensor2, etc.]
-        - default_names (optional): default sensor names to record if mode
-                                    is not supplied (left to None)
-        - recording_types: dict {sensor name: Recording} indicating what class
-                           of recording (RecordingBase class or subclass)
-                           needs to be instantiated for each sensor.
-        - recording_kwargs: dict {sensor name: kwargs}
-        - programs: dict {mode: programs} with mode same as the mode argument above
-                    (describing all sensor recordings that are concerned by the
-                    supplied programs), and programs an iterable of objects from
-                    the prevo.control.Program class or subclass.
-        - control_params: dict {command: kwargs} containing any kwargs to pass
-                          to the program controls (e.g. dt, range_limits, etc.)
-                          Note: if None, use default params
-                          (see RecordingControl class)
-        - path: directory in which data is recorded.
-        - **kwargs is any keyword arguments to pass to Record __init__
-          (only possible options: on_start and dt_request)
+        mode : str or None, optional
+            Sensor names in any order (e.g., 'PTB1') and potentially with separators
+            (e.g., 'P-T-B1'). If None, all sensors are used by default.
+        sensors : iterable, optional
+            Iterable of sensor classes (e.g., [Sensor1, Sensor2]).
+        default_names : iterable or None, optional
+            Default sensor names to record if `mode` is not supplied.
+        recording_types : dict, optional
+            Dictionary mapping sensor names to their corresponding Recording class
+            (RecordingBase or subclass) to be instantiated.
+        recording_kwargs : dict, optional
+            Dictionary mapping sensor names to their initialization keyword
+            arguments.
+        programs : dict, optional
+            Dictionary mapping `mode` to an iterable of Program objects (or
+            subclasses) from the `prevo.control.Program` class. The `mode` key
+            describes all sensor recordings affected by the supplied programs.
+        control_params : dict, optional
+            Dictionary of `{command: kwargs}` to pass to program controls (e.g.,
+            `dt`, `range_limits`). If None, default parameters are used (see
+            `RecordingControl` class).
+        path : str, default="."
+            Directory where recorded data will be saved.
+        **kwargs : dict, optional
+            Additional keyword arguments to pass to the `Record.__init__` method.
+            Possible options: `on_start` and `dt_request`.
         """
         all_sensors = {Sensor.name: Sensor for Sensor in sensors}
-        name_info = {'possible_names': all_sensors,
-                     'default_names': default_names}
+        name_info = {"possible_names": all_sensors, "default_names": default_names}
         names = mode_to_names(mode=mode, **name_info)
 
         programs = {} if programs is None else programs
