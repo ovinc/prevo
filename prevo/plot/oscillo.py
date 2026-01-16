@@ -19,7 +19,6 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-
 # Standard library imports
 import time
 
@@ -44,7 +43,6 @@ class OscilloMeasurementFormatter(MeasurementFormatter):
 
 
 class OscilloGraph(GraphBase):
-
     def __init__(
         self,
         names,
@@ -55,44 +53,46 @@ class OscilloGraph(GraphBase):
         colors=None,
         legends=None,
         linestyles=None,
-        linestyle='.',
+        linestyle=".",
         data_as_array=False,
         measurement_formatter=OscilloMeasurementFormatter(),
     ):
-        """Initiate figures and axes for data plot as a function of asked types.
+        """Initialize figures and axes for plotting data as a function of specified types.
 
-        Input
-        -----
-        - names: iterable of names of recordings/sensors that will be plotted.
-        - data_types: dict with the recording names as keys, and the
-                      corresponding data types as values.
-                      (dict can have more keys than those in 'names')
-        - data_ranges: dict with the possible data types as keys, and the
-                       corresponding range of values expected for this data
-                       as values. Used to set ylims of graph initially.
-                      (dict can have more keys than actual data types used)
-        - window_width: width (in seconds) of the displayed window
-        - fig (optional): matplotlib figure in which to draw the graph.
-        - colors: optional dict of colors with keys 'fig', 'ax', 'bar' and the
-                  names of the recordings.
-        - legends: optional dict of legend names (iterable) corresponding to
-                   all channels of each sensor, with the names of the
-                   recordings as keys.
-        - linestyles: optional dict of linestyles (iterable) to distinguish
-                      channels and sensors, with the names of the recordings
-                      as keys. If not specified (None), all lines have the
-                      linestyle defined by the `linestyle=` parameter (see
-                      below). If only some recordings are specified, the other
-                      recordings have the default linestyle or the linestyle
-                      defined by the `linestyle=` parameter.
-        - linestyle: Matplotlib linestyle (e.g. '.', '-', '.-' etc.)
-        - data_as_array: if sensors return arrays of values for different times
-                         instead of values for a single time, put this
-                         bool as True (default False)
-                         NOTE: data_as array can also be a dict of bools
-                         with names as keys if some sensors come as arrays
-                         and some not.
-        - measurement_formatter: MeasurementFormatter (or subclass) object.
+        Parameters
+        ----------
+        names : iterable
+            Names of recordings/sensors to be plotted.
+        data_types : dict
+            Dictionary with recording names as keys and corresponding data types
+            as values. Can contain more keys than those in `names`.
+        data_ranges : dict
+            Dictionary with possible data types as keys and corresponding value
+            ranges as values. Used to set initial y-axis limits. Can contain more
+            keys than actual data types used.
+        window_width : float
+            Width (in seconds) of the displayed window.
+        fig : matplotlib.figure.Figure, optional
+            Matplotlib figure in which to draw the graph.
+        colors : dict, optional
+            Dictionary of colors with keys 'fig', 'ax', 'bar', and recording
+            names.
+        legends : dict, optional
+            Dictionary of legend names (iterable) for all channels of each
+            sensor, keyed by recording names.
+        linestyles : dict, optional
+            Dictionary of linestyles (iterable) to distinguish channels and
+            sensors, keyed by recording names. If None, all lines use the
+            `linestyle` parameter. If only some recordings are specified, others
+            use the default or `linestyle`.
+        linestyle : str, default='.'
+            Matplotlib linestyle (e.g., '.', '-', '.-').
+        data_as_array : bool or dict, default=False
+            If sensors return arrays of values for different times, set to True.
+            Can also be a dictionary of booleans keyed by recording names if
+            some sensors return arrays and others do not.
+        measurement_formatter : MeasurementFormatter, optional
+            MeasurementFormatter (or subclass) object.
         """
         self.data_ranges = data_ranges
         self.window_width = window_width
@@ -111,7 +111,9 @@ class OscilloGraph(GraphBase):
         )
 
         self.create_bars()
-        self.previous_data = self.create_empty_data()  # current_data created by the base class
+        self.previous_data = (
+            self.create_empty_data()
+        )  # current_data created by the base class
 
     # ================== Methods subclassed from GraphBase ===================
 
@@ -125,7 +127,7 @@ class OscilloGraph(GraphBase):
         try:
             iter(axes)
         except TypeError:
-            axes = axes,
+            axes = (axes,)
 
         self.axs = {}
         for ax, datatype in zip(axes, self.all_data_types):
@@ -142,11 +144,10 @@ class OscilloGraph(GraphBase):
             ax.grid()
 
     def update_data(self, data):
-
         tmin, tmax = self.get_time_boundaries(data)
 
         if self.reference_time is None:
-            self.reference_time = tmin   # Take time of 1st data as time 0
+            self.reference_time = tmin  # Take time of 1st data as time 0
 
         self.update_stored_data(
             data=data,
@@ -186,8 +187,8 @@ class OscilloGraph(GraphBase):
         """Create traveling bars"""
         self.bars = {}
         for dtype, ax in self.axs.items():
-            barcolor = self.colors.get('bar', 'silver')
-            bar = ax.axvline(0, linestyle='-', c=barcolor, linewidth=4)
+            barcolor = self.colors.get("bar", "silver")
+            bar = ax.axvline(0, linestyle="-", c=barcolor, linewidth=4)
             self.bars[dtype] = bar
 
     # =============== Methods overriden from the parent class ================
@@ -200,8 +201,8 @@ class OscilloGraph(GraphBase):
 
     def get_time_boundaries(self, data):
         """Subclass if necessary."""
-        t = data['time (unix)']
-        name = data['name']
+        t = data["time (unix)"]
+        name = data["name"]
 
         if self.data_as_array[name]:
             return t[0], t[-1]
@@ -234,19 +235,18 @@ class OscilloGraph(GraphBase):
         data: data as output by format_measurement()
         stored_data: either self.current_data or self.previous_data.
         """
-        name = data['name']
-        time = data['time (unix)']
-        values = data['values']
+        name = data["name"]
+        time = data["time (unix)"]
+        values = data["values"]
 
-        stored_data[name]['times'].append(time)
+        stored_data[name]["times"].append(time)
         for i, value in enumerate(values):
-            stored_data[name]['values'][i].append(value)
+            stored_data[name]["values"][i].append(value)
 
     def update_lines(self):
         """Update line positions with current data."""
 
         for name in self.lines:
-
             lines = self.lines[name]
             previous_data = self.previous_data[name]
             current_data = self.current_data[name]
@@ -254,31 +254,32 @@ class OscilloGraph(GraphBase):
             rel_times = []
 
             # Avoids problems if no data stored yet
-            prev_exists = bool(previous_data['times'])
-            curr_exists = bool(current_data['times'])
+            prev_exists = bool(previous_data["times"])
+            curr_exists = bool(current_data["times"])
 
             if not (prev_exists or curr_exists):
                 continue
 
             if curr_exists:
-                curr_times = self.timelist_to_array[name](current_data['times'])
+                curr_times = self.timelist_to_array[name](current_data["times"])
                 curr_rel_times = curr_times - self.reference_time
                 rel_times.append(curr_rel_times)
 
             if prev_exists:
-                prev_times = self.timelist_to_array[name](previous_data['times'])
-                prev_condition = (prev_times + self.window_width > self.current_time)
-                prev_rel_times = prev_times[prev_condition] - self.reference_time + self.window_width
+                prev_times = self.timelist_to_array[name](previous_data["times"])
+                prev_condition = prev_times + self.window_width > self.current_time
+                prev_rel_times = (
+                    prev_times[prev_condition] - self.reference_time + self.window_width
+                )
                 rel_times.append(prev_rel_times)
 
             rel_times_array = np.concatenate(rel_times)
 
             for line, prev_values, curr_values in zip(
                 lines,
-                previous_data['values'],
-                current_data['values'],
+                previous_data["values"],
+                current_data["values"],
             ):
-
                 vals = []
 
                 if curr_exists:
@@ -294,7 +295,7 @@ class OscilloGraph(GraphBase):
                 line.set_data(rel_times_array, values_array)
 
     def update_bars(self):
-        if self.reference_time:   # Avoids problems if no data arrived yet
+        if self.reference_time:  # Avoids problems if no data arrived yet
             t = self.relative_time
             for bar in self.bars.values():
                 bar.set_xdata(t)

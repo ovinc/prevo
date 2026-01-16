@@ -19,7 +19,6 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-
 # Standard library imports
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -42,6 +41,7 @@ from ..misc import get_last_from_queue
 try:
     import pandas as pd
     from pandas.plotting import register_matplotlib_converters
+
     register_matplotlib_converters()
 except ModuleNotFoundError:
     pandas_available = False
@@ -80,7 +80,7 @@ class MeasurementFormatter:
 
         Subclass possible to adapt to applications.
         """
-        data = {key: measurement[key] for key in ('name', 'values', 'time (unix)')}
+        data = {key: measurement[key] for key in ("name", "values", "time (unix)")}
         return data
 
     # ==== Methods to transform lists into arrays for matplotlib plotting ====
@@ -119,7 +119,7 @@ class MeasurementFormatter:
         Note: this is the fastest method, but the datetimes are in UTC format
               (not local time)
         """
-        return (np.array(unix_times) * 1e9).astype('datetime64[ns]')
+        return (np.array(unix_times) * 1e9).astype("datetime64[ns]")
 
     @staticmethod
     def to_datetime_pandas(unix_times):
@@ -129,7 +129,7 @@ class MeasurementFormatter:
               slower than the numpy approach.
         """
         # For some reason, it's faster (and more precise) to convert to numpy first
-        np_times = (np.array(unix_times) * 1e9).astype('datetime64[ns]')
+        np_times = (np.array(unix_times) * 1e9).astype("datetime64[ns]")
         pd_times = pd.Series(np_times)
         return pd.to_datetime(pd_times, utc=True).dt.tz_convert(local_timezone)
 
@@ -145,43 +145,45 @@ class GraphBase(ABC):
         colors=None,
         legends=None,
         linestyles=None,
-        linestyle='.',
+        linestyle=".",
         data_as_array=False,
-        time_conversion='numpy',
+        time_conversion="numpy",
         measurement_formatter=MeasurementFormatter(),
     ):
-        """Initiate figures and axes for data plot as a function of asked types.
+        """Initialize figures and axes for plotting data as a function of specified types.
 
-        Input
-        -----
-        - names: iterable of names of recordings/sensors that will be plotted.
-        - data types: dict with the recording names as keys, and the
-                      corresponding data types as values.
-                      (dict can have more keys than those in 'names')
-        - fig (optional): matplotlib figure in which to draw the graph.
-        - colors: optional dict of colors with keys 'fig', 'ax', and the
-                    names of the recordings.
-        - legends: optional dict of legend names (iterable) corresponding to
-                   all channels of each sensor, with the names of the
-                   recordings as keys.
-        - linestyles: optional dict of linestyles (iterable) to distinguish
-                      channels and sensors, with the names of the recordings
-                      as keys. If not specified (None), all lines have the
-                      linestyle defined by the `linestyle=` parameter (see
-                      below). If only some recordings are specified, the other
-                      recordings have the default linestyle or the linestyle
-                      defined by the `linestyle=` parameter.
-        - linestyle: Matplotlib linestyle (e.g. '.', '-', '.-' etc.)
-        - data_as_array: if sensors return arrays of values for different times
-                         instead of values for a single time, put this
-                         bool as True (default False).
-                         NOTE: data_as array can also be a dict of bools
-                         with names as keys if some sensors come as arrays
-                         and some not.
-        - time_conversion: how to convert from unix time to datetime for arrays;
-                           possible values: 'numpy', 'pandas'.
-        - measurement_formatter: MeasurementFormatter (or subclass) object.
+        Parameters
+        ----------
+        names : iterable
+            Names of recordings/sensors to be plotted.
+        data_types : dict
+            Dictionary with recording names as keys and corresponding data types as
+            values. Can contain more keys than those in `names`.
+        fig : matplotlib.figure.Figure, optional
+            Matplotlib figure in which to draw the graph.
+        colors : dict, optional
+            Dictionary of colors with keys 'fig', 'ax', and recording names.
+        legends : dict, optional
+            Dictionary of legend names (iterable) for all channels of each sensor,
+            keyed by recording names.
+        linestyles : dict, optional
+            Dictionary of linestyles (iterable) to distinguish channels and sensors,
+            keyed by recording names. If None, all lines use the `linestyle` parameter.
+            If only some recordings are specified, others use the default or
+            `linestyle`.
+        linestyle : str, default='.'
+            Matplotlib linestyle (e.g., '.', '-', '.-').
+        data_as_array : bool or dict, default=False
+            If sensors return arrays of values for different times, set to True. Can also
+            be a dictionary of booleans keyed by recording names if some sensors return
+            arrays and others do not.
+        time_conversion : str, default='numpy'
+            Method to convert Unix time to datetime for arrays. Possible values:
+            'numpy', 'pandas'.
+        measurement_formatter : MeasurementFormatter, optional
+            MeasurementFormatter (or subclass) object.
         """
+
         self.names = names
         self.data_types = {name: data_types[name] for name in self.names}
         self.fig = fig
@@ -203,8 +205,7 @@ class GraphBase(ABC):
         self.fig.tight_layout()
 
         # Create onclick callback to activate / deactivate autoscaling
-        self.cid = self.fig.canvas.mpl_connect('button_press_event',
-                                               self.onclick)
+        self.cid = self.fig.canvas.mpl_connect("button_press_event", self.onclick)
 
     # ========================== Methods to subclass =========================
 
@@ -257,14 +258,14 @@ class GraphBase(ABC):
         return set(all_types)
 
     def set_colors(self):
-        """"Define fig/ax colors if supplied"""
+        """ "Define fig/ax colors if supplied"""
         if self.colors is None:
             self.colors = {}
         else:
-            figcolor = self.colors.get('fig', 'white')
+            figcolor = self.colors.get("fig", "white")
             self.fig.set_facecolor(figcolor)
             for ax in self.axs.values():
-                axcolor = self.colors.get('ax', 'white')
+                axcolor = self.colors.get("ax", "white")
                 ax.set_facecolor(axcolor)
                 ax.grid()
 
@@ -280,7 +281,7 @@ class GraphBase(ABC):
         if not n_missing_colors:
             return
 
-        m = cm.get_cmap('tab10', n_missing_colors)
+        m = cm.get_cmap("tab10", n_missing_colors)
         i = 0
         for name in missing_color_names:
             dtypes = self.data_types[name]
@@ -296,7 +297,6 @@ class GraphBase(ABC):
         self.lines_list = []
 
         for name in self.names:
-
             dtypes = self.data_types[name]
             clrs = self.colors[name]
             labels = self.legends.get(name, [None] * len(dtypes))
@@ -305,19 +305,18 @@ class GraphBase(ABC):
             self.lines[name] = []
 
             for dtype, clr, label, lstyle in zip(dtypes, clrs, labels, lstyles):
-
                 # Plot data in correct axis depending on type
                 ax = self.axs[dtype]
-                line, = ax.plot([], [], lstyle, color=clr, label=label)
+                (line,) = ax.plot([], [], lstyle, color=clr, label=label)
 
                 self.lines[name].append(line)
                 # Below, used for returning animated artists for blitting
                 self.lines_list.append(line)
 
         if self.legends:
-            legend_clr = self.colors.get('legend')
+            legend_clr = self.colors.get("legend")
             for ax in self.axs.values():
-                ax.legend(loc='lower left', facecolor=legend_clr)
+                ax.legend(loc="lower left", facecolor=legend_clr)
 
     def create_empty_data(self):
         data = {}
@@ -326,7 +325,7 @@ class GraphBase(ABC):
             values = []
             for _ in self.data_types[name]:
                 values.append([])
-            data[name] = {'times': times, 'values': values}
+            data[name] = {"times": times, "values": values}
         return data
 
     @staticmethod
@@ -339,10 +338,10 @@ class GraphBase(ABC):
         ax = event.inaxes
         if ax is None:
             pass
-        elif event.button == 1:                        # left click
-            ax.axes.autoscale(False, axis='both')
-        elif event.button == 3:                        # right click
-            ax.axes.autoscale(True, axis='both')
+        elif event.button == 1:  # left click
+            ax.axes.autoscale(False, axis="both")
+        elif event.button == 3:  # right click
+            ax.axes.autoscale(True, axis="both")
         else:
             pass
 
@@ -351,7 +350,7 @@ class GraphBase(ABC):
     def manage_array_conversion(self, data_as_array):
         """Determine conversion methods from data to arrays"""
         try:
-            data_as_array.get   # no error if dict
+            data_as_array.get  # no error if dict
         except AttributeError:  # it's a bool: put info for all sensors
             self.data_as_array = {name: data_as_array for name in self.names}
         else:
@@ -362,19 +361,27 @@ class GraphBase(ABC):
 
         for name, data_as_array in self.data_as_array.items():
             if data_as_array:
-                self.datalist_to_array[name] = self.measurement_formatter.list_of_value_arrays_to_array
-                self.timelist_to_array[name] = self.measurement_formatter.list_of_time_arrays_to_array
+                self.datalist_to_array[name] = (
+                    self.measurement_formatter.list_of_value_arrays_to_array
+                )
+                self.timelist_to_array[name] = (
+                    self.measurement_formatter.list_of_time_arrays_to_array
+                )
             else:
-                self.datalist_to_array[name] = self.measurement_formatter.list_of_single_values_to_array
-                self.timelist_to_array[name] = self.measurement_formatter.list_of_single_times_to_array
+                self.datalist_to_array[name] = (
+                    self.measurement_formatter.list_of_single_values_to_array
+                )
+                self.timelist_to_array[name] = (
+                    self.measurement_formatter.list_of_single_times_to_array
+                )
 
     def manage_time_conversion(self, time_conversion):
         """How to convert input times into datetimes manageable for plotting."""
 
         time_converters = {
-            'datetime': self.measurement_formatter.to_datetime_datetime,
-            'numpy': self.measurement_formatter.to_datetime_numpy,
-            'pandas': self.measurement_formatter.to_datetime_pandas,
+            "datetime": self.measurement_formatter.to_datetime_datetime,
+            "numpy": self.measurement_formatter.to_datetime_numpy,
+            "pandas": self.measurement_formatter.to_datetime_pandas,
         }
 
         self.time_converters = {}
@@ -382,7 +389,7 @@ class GraphBase(ABC):
             if self.data_as_array[name]:
                 self.time_converters[name] = time_converters[time_conversion]
             else:
-                self.time_converters[name] = time_converters['datetime']
+                self.time_converters[name] = time_converters["datetime"]
 
     # ================= Update graph with data from queue(s) =================
 
@@ -393,16 +400,20 @@ class GraphBase(ABC):
         dt_graph=0.1,
         blit=False,
     ):
-        """Run live view of plot with data from queues.
+        """Run a live view of the plot using data from queues.
 
-        (Convenience method to instantiate a UpdateGraph object)
+        Convenience method to instantiate an UpdateGraph object.
 
         Parameters
         ----------
-        - queues: iterable of queues to read data from
-        - external_stop (optional): external stop request, closes the figure if set
-        - dt graph: time interval to update the graph
-        - blit: if True, use blitting to speed up the matplotlib animation
+        queues : iterable
+            Iterable of queues to read data from.
+        external_stop : optional
+            External stop request. If set, closes the figure.
+        dt_graph : float, default=0.1
+            Time interval (in seconds) to update the graph.
+        blit : bool, default=False
+            If True, use blitting to speed up the Matplotlib animation.
         """
         update_graph = UpdateGraph(
             graph=self,
@@ -419,7 +430,6 @@ class GraphBase(ABC):
 
 
 class UpdateGraph:
-
     def __init__(
         self,
         graph,
@@ -428,17 +438,21 @@ class UpdateGraph:
         dt_graph=0.1,
         blit=False,
     ):
-        """Update plot with data received from a queue.
+        """Update the plot with data received from a queue.
 
-        INPUTS
-        ------
-        - graph: object of GraphBase class and subclasses
-        - queues: iterable of queues to read data from
-        - external_stop: stopping event (threading.Event or equivalent)
-                         signaling stopping requested from outside of the class
-                         (won't be set or cleared, just monitored)
-        - dt_graph: time interval to update the graph
-        - blit: if True, use blitting to speed up the matplotlib animation
+        Parameters
+        ----------
+        graph : GraphBase or subclass
+            Object of the GraphBase class or its subclasses.
+        queues : iterable
+            Iterable of queues to read data from.
+        external_stop : threading.Event or equivalent, optional
+            Stopping event signaling a stop request from outside the class.
+            This event is only monitored and not modified.
+        dt_graph : float, default=0.1
+            Time interval (in seconds) to update the graph.
+        blit : bool, default=False
+            If True, use blitting to speed up the Matplotlib animation.
         """
         self.graph = graph
         self.queues = queues
@@ -448,7 +462,7 @@ class UpdateGraph:
         self.external_stop = external_stop
         self.internal_stop = Event()
 
-        self.graph.fig.canvas.mpl_connect('close_event', self.on_fig_close)
+        self.graph.fig.canvas.mpl_connect("close_event", self.on_fig_close)
 
     def on_fig_close(self, event):
         """What to do when figure is closed."""
@@ -474,7 +488,6 @@ class UpdateGraph:
             return self.graph.animated_artists
 
     def run(self):
-
         # Below, it doesn't work if there is no ani = before the FuncAnimation
         ani = FuncAnimation(
             fig=self.graph.fig,
