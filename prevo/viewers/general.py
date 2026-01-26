@@ -20,7 +20,6 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-
 from abc import ABC, abstractmethod
 import time
 from queue import Queue
@@ -36,9 +35,9 @@ from ..misc import get_all_from_queue, get_last_from_queue
 
 
 CONFIG = {
-    'bgcolor': '#485a6a',
-    'textcolor': '#e7eff6',
-    'fontfamily': "serif",
+    "bgcolor": "#485a6a",
+    "textcolor": "#e7eff6",
+    "fontfamily": "serif",
 }
 
 
@@ -65,9 +64,9 @@ def max_possible_pixel_value(img):
     ------
     vmax: max pixel value (int or float or None)
     """
-    if img.dtype == 'uint8':
+    if img.dtype == "uint8":
         return 2**8 - 1
-    elif img.dtype == 'uint16':
+    elif img.dtype == "uint16":
         return 2**16 - 1
     else:
         return None
@@ -78,6 +77,7 @@ class InfoSender(ABC):
 
     For example: fps, image info, etc.
     """
+
     def __init__(
         self,
         queue=None,
@@ -123,7 +123,7 @@ class InfoSender(ABC):
 
 
 class LiveFpsCalculator(InfoSender):
-    """"Calculate fps in real time from a queue supplying image times.
+    """ "Calculate fps in real time from a queue supplying image times.
 
     fps values are sent back in another queue as str
     """
@@ -149,12 +149,12 @@ class LiveFpsCalculator(InfoSender):
         if times:
             if len(times) > 1:
                 fps = 1 / np.diff(times).mean()
-                return f'[{fps:.1f} fps]'
-        return '[... fps]'
+                return f"[{fps:.1f} fps]"
+        return "[... fps]"
 
 
 class LiveImageNumber(InfoSender):
-    """"Calculate fps in real time from a queue supplying image times.
+    """ "Calculate fps in real time from a queue supplying image times.
 
     fps values are sent back in another queue as str
     """
@@ -182,9 +182,9 @@ class LiveImageNumber(InfoSender):
             self.last_num = num
 
         if self.last_num is None:
-            return '[# ...]'
+            return "[# ...]"
         else:
-            return f'[# {self.last_num}]'
+            return f"[# {self.last_num}]"
 
 
 class MeasurementFormatter:
@@ -199,7 +199,7 @@ class MeasurementFormatter:
         (returns an array-like object).
         Can be subclassed to accommodate different queue formats.
         """
-        return measurement['image']
+        return measurement["image"]
 
     def get_num(self, measurement):
         """How to get image numbers from individual elements from the queue.
@@ -207,13 +207,14 @@ class MeasurementFormatter:
         (returns an int).
         Can be subclassed to accommodate different queue formats.
         """
-        return measurement['num']
+        return measurement["num"]
 
 
 default_measurement_formatter = MeasurementFormatter()
 
 
 # =============================== Base classes ===============================
+
 
 class WindowBase:
     """Base class for windows managing single image queues."""
@@ -260,12 +261,12 @@ class WindowBase:
         try:
             self._init_info(dt_fps=dt_fps, dt_num=dt_num)
         except Exception:
-            print(f'--- !!! Error in  {self.name} Window Init !!! ---')
+            print(f"--- !!! Error in  {self.name} Window Init !!! ---")
             print_exc()
             self.stop()
 
     def __repr__(self):
-        return f'{self.__class__.__name__} ({self.name})'
+        return f"{self.__class__.__name__} ({self.name})"
 
     def _init_info(self, **kwargs):
         """Init info objects that manage printing of fps, img number etc."""
@@ -276,23 +277,25 @@ class WindowBase:
 
         # store times at which images are shown on screen (e.g. for fps calc.)
         if self.calculate_fps:
-            self.display_times = []             # to calculate fps on all times
+            self.display_times = []  # to calculate fps on all times
 
         if self.show_fps:
             self.display_times_queue = Queue()  # to calculate fps on partial data
-            fps_calculator = LiveFpsCalculator(time_queue=self.display_times_queue,
-                                               dt_check=kwargs.get('dt_fps'))
-            self.info_queues['fps'] = fps_calculator.queue
-            self.info_values['fps'] = ''
+            fps_calculator = LiveFpsCalculator(
+                time_queue=self.display_times_queue, dt_check=kwargs.get("dt_fps")
+            )
+            self.info_queues["fps"] = fps_calculator.queue
+            self.info_values["fps"] = ""
             self.info_senders.append(fps_calculator)
             fps_calculator.start()
 
         if self.show_num:
             self.image_number_queue = Queue()
-            image_number = LiveImageNumber(num_queue=self.image_number_queue,
-                                           dt_check=kwargs.get('dt_num'))
-            self.info_queues['num'] = image_number.queue
-            self.info_values['num'] = ''
+            image_number = LiveImageNumber(
+                num_queue=self.image_number_queue, dt_check=kwargs.get("dt_num")
+            )
+            self.info_queues["num"] = image_number.queue
+            self.info_values["num"] = ""
             self.info_senders.append(image_number)
             image_number.start()
 
@@ -333,7 +336,7 @@ class WindowBase:
                 update = True
                 self.info_values[name] = info
         if update:
-            new_info = ' '.join(self.info_values.values())
+            new_info = " ".join(self.info_values.values())
             return new_info
 
     def _update_info(self):
@@ -353,7 +356,6 @@ class WindowBase:
         """How to process measurement from the image queue"""
         data = get_last_from_queue(self.image_queue)
         if data is not None:
-
             self.image = self.measurement_formatter.get_image(data)
 
             if self.show_num:
@@ -380,9 +382,9 @@ class WindowBase:
         if self.calculate_fps:
             if len(self.display_times) > 1:
                 fps = 1 / np.diff(self.display_times).mean()
-                print(f'Average display frame rate [{self.name}]: {fps:.3f} fps. ')
+                print(f"Average display frame rate [{self.name}]: {fps:.3f} fps. ")
             else:
-                print('Impossible to calculate average FPS (not enough values). ')
+                print("Impossible to calculate average FPS (not enough values). ")
 
 
 class ViewerBase:
@@ -439,7 +441,7 @@ class ViewerBase:
             self._init_windows()
             self._run()
         except Exception:
-            print('--- !!! Error in Viewer !!! ---')
+            print("--- !!! Error in Viewer !!! ---")
             print_exc()
         self.stop()
 

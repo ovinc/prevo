@@ -20,7 +20,6 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-
 import tkinter as tk
 import itertools
 from PIL import Image, ImageTk
@@ -69,7 +68,7 @@ class TkWindow(WindowBase):
     @parent.setter
     def parent(self, value):
         self._parent = value
-        self._parent.configure(bg=CONFIG['bgcolor'])
+        self._parent.configure(bg=CONFIG["bgcolor"])
 
     def _init_window(self):
         """Create tkinter window and elements."""
@@ -77,9 +76,9 @@ class TkWindow(WindowBase):
             self.title_label = tk.Label(
                 self.parent,
                 text=self.name,
-                font=(CONFIG['fontfamily'], 14),
-                bg=CONFIG['bgcolor'],
-                fg=CONFIG['textcolor'],
+                font=(CONFIG["fontfamily"], 14),
+                bg=CONFIG["bgcolor"],
+                fg=CONFIG["textcolor"],
             )
             self.title_label.pack(expand=True)
 
@@ -89,10 +88,10 @@ class TkWindow(WindowBase):
         if self.info_queues:
             self.info_label = tk.Label(
                 self.parent,
-                bg=CONFIG['bgcolor'],
-                fg=CONFIG['textcolor'],
-                font=(CONFIG['fontfamily'], 12),
-                text=str('...'),
+                bg=CONFIG["bgcolor"],
+                fg=CONFIG["textcolor"],
+                font=(CONFIG["fontfamily"], 12),
+                text=str("..."),
             )
             self.info_label.pack(expand=True)
 
@@ -180,7 +179,7 @@ class TkViewer(ViewerBase):
 
     def _create_root(self):
         self.root = tk.Tk()
-        self.root.configure(bg=CONFIG['bgcolor'])
+        self.root.configure(bg=CONFIG["bgcolor"])
         # Detect manual closing of window
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -197,15 +196,15 @@ class TkViewer(ViewerBase):
 
         for window, position in zip(self.windows, positions):
             i, j = position
-            window.parent.grid(row=i, column=j, padx=5, pady=5, sticky='nsew')
+            window.parent.grid(row=i, column=j, padx=5, pady=5, sticky="nsew")
 
         # Make columns and rows expand and be all the same size
         # Note: the str in uniform= is just an identifier
         # all columns / rows sharing the same string are kept of same size
         for i in range(n1):
-            parent.grid_rowconfigure(i, weight=1, uniform='same rows')
+            parent.grid_rowconfigure(i, weight=1, uniform="same rows")
         for j in range(n2):
-            parent.grid_columnconfigure(j, weight=1, uniform='same columns')
+            parent.grid_columnconfigure(j, weight=1, uniform="same columns")
 
     def _init_viewer(self):
         self._create_root()

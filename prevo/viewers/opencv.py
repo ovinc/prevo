@@ -20,7 +20,6 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-
 from .general import ViewerBase, WindowBase
 
 try:
@@ -30,7 +29,7 @@ except ModuleNotFoundError:
 
 
 class CvWindow(WindowBase):
-    """Display camera images using OpenCV"""
+    """Display camera images using OpenCV."""
 
     def __init__(
         self,
@@ -38,39 +37,56 @@ class CvWindow(WindowBase):
         name,
         **kwargs,
     ):
-        """Init Window object.
+        """Initialize a CvWindow object.
 
         Parameters
         ----------
+        image_queue : queue
+            Queue in which taken images are placed.
+        name : str
+            Name of the window, serving as the ID for OpenCV windows.
+        **kwargs : dict, optional
+            Additional keyword arguments passed to WindowBase.
 
-        - image_queue: queue in which taken images are put.
-        - name: NOT optional here because it serves as ID for openCV windows
-
-        Additional kwargs from WindowBase:
-        - calculate_fps: if True, store image times fo calculate fps
-        - show_fps: if True, indicate current display fps on viewer
-        - show_num: if True, indicate current image number on viewer
-                    (note: image data must be a dict with key 'num', or
-                    a different data_formatter must be provided)
-        - dt_fps: how often (in seconds) display fps are calculated
-        - dt_num: how often (in seconds) image numbers are updated
-        - measurement_formatter: object that transforms elements from the
-                                 queue into image arrays and image numbers
-                                 (type MeasurementFormatter or equivalent)
+        Other Parameters
+        ----------------
+        calculate_fps : bool, optional
+            If True, store image times to calculate FPS.
+        show_fps : bool, optional
+            If True, display the current FPS on the viewer.
+        show_num : bool, optional
+            If True, display the current image number on the viewer.
+            Note: Image data must be a dict with key 'num', or a different
+            data_formatter must be provided.
+        dt_fps : float, optional
+            How often (in seconds) the display FPS is calculated.
+        dt_num : float, optional
+            How often (in seconds) the image numbers are updated.
+        measurement_formatter : MeausrementFormatter object, optional
+            Object that transforms elements from the queue into image arrays
+            and image numbers (type MeasurementFormatter or equivalent).
         """
         super().__init__(image_queue, name=name, **kwargs)
 
     def _init_window(self):
         """Create window"""
         cv2.namedWindow(self.name, cv2.WINDOW_NORMAL)
-        self.info = '...'
+        self.info = "..."
 
     def _display_image(self):
         # Here we need to have the info display directly in display_image
         # since the info is written directly on the image itself
         # This can cause some imprecisions in the image numbers displayed
-        cv2.putText(self.image, self.info, (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                    1, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(
+            self.image,
+            self.info,
+            (50, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
 
         if self.image.ndim > 2:
             # openCV works with BGR data
@@ -86,18 +102,22 @@ class CvViewer(ViewerBase):
         windows,
         **kwargs,
     ):
-        """Init CvViewer object
+        """Initialize a CvViewer object.
 
         Parameters
         ----------
+        windows : iterable
+            Iterable of objects of type WindowBase or its subclasses.
+        **kwargs : dict, optional
+            Additional keyword arguments passed to ViewerBase.
 
-        - windows: iterable of objects of type WindowBase or subclasses
-
-        Additional kwargs from ViewerBase
-        - external_stop: stopping event (threading.Event or equivalent)
-                         signaling stopping requested from outside of the class
-                         (won't be set or cleared, just monitored)
-        - dt_graph: how often (in seconds) the viewer is updated
+        Other Parameters
+        ----------------
+        external_stop : threading.Event, optional
+            Stopping event signaling a stop request from outside the class.
+            This event is monitored but not modified.
+        dt_graph : float, optional
+            How often (in seconds) the viewer is updated.
         """
         super().__init__(windows=windows, **kwargs)
 
@@ -108,7 +128,7 @@ class CvViewer(ViewerBase):
             wopen = cv2.getWindowProperty(window.name, cv2.WND_PROP_VISIBLE) > 0
             open_windows.append(wopen)
 
-        while (any(open_windows)):
+        while any(open_windows):
             self._update_info()
             self._update_images()
             self._check_external_stop()

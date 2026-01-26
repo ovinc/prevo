@@ -20,7 +20,6 @@
 # along with the prevo python package.
 # If not, see <https://www.gnu.org/licenses/>
 
-
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
@@ -77,22 +76,22 @@ class MplWindow(WindowBase):
         self.init_done = False
 
     def _format_axes(self):
-        """"Set colors, title etc."""
+        """ "Set colors, title etc."""
         self.ax.set_title(
             self.name,
-            color=CONFIG['textcolor'],
-            fontfamily=CONFIG['fontfamily'],
+            color=CONFIG["textcolor"],
+            fontfamily=CONFIG["fontfamily"],
         )
 
-        for location in 'bottom', 'top', 'left', 'right':
+        for location in "bottom", "top", "left", "right":
             # self.ax.spines[location].set_color(textcolor)
             self.ax.spines[location].set_visible(False)
 
-        self.ax.xaxis.label.set_color(CONFIG['textcolor'])
-        self.ax.tick_params(axis='both', colors=CONFIG['textcolor'])
+        self.ax.xaxis.label.set_color(CONFIG["textcolor"])
+        self.ax.tick_params(axis="both", colors=CONFIG["textcolor"])
 
     def _init_image(self, image):
-        kwargs = {} if image.ndim > 2 else {'cmap': 'gray'}
+        kwargs = {} if image.ndim > 2 else {"cmap": "gray"}
 
         self.im = self.ax.imshow(
             image,
@@ -103,9 +102,9 @@ class MplWindow(WindowBase):
         )
         self.init_done = True
         self.xlabel = self.ax.set_xlabel(
-            '...',
-            color=CONFIG['textcolor'],
-            fontfamily=CONFIG['fontfamily'],
+            "...",
+            color=CONFIG["textcolor"],
+            fontfamily=CONFIG["fontfamily"],
         )
 
     def _update(self, i=0):
@@ -176,7 +175,7 @@ class MplViewer(ViewerBase):
             ax = self.fig.add_subplot(n1, n2, i + 1)
             window.ax = ax
 
-        self.fig.set_facecolor(CONFIG['bgcolor'])
+        self.fig.set_facecolor(CONFIG["bgcolor"])
         self.fig.tight_layout()
 
         # NOTE: stop() is called automatically by start() once matplotlib
