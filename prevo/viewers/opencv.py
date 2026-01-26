@@ -25,7 +25,12 @@ from .general import ViewerBase, WindowBase
 try:
     import cv2
 except ModuleNotFoundError:
-    pass
+    opencv_available = False
+else:
+    opencv_available = True
+
+
+ESCAPE_KEYS = (ord('q'), ord('Q'), 27)  # 27 is ESC.
 
 
 class CvWindow(WindowBase):
@@ -119,25 +124,39 @@ class CvViewer(ViewerBase):
         dt_graph : float, optional
             How often (in seconds) the viewer is updated.
         """
+        if not opencv_available:
+            raise ValueError('OpenCV not installed.')
+
         super().__init__(windows=windows, **kwargs)
 
-    def _run(self):
-        """Loop to run live viewer"""
+    # ------------------------- Misc. useful methods -------------------------
+
+    def _count_open_windows(self):
+        """Return the number of open windows (int)"""
         open_windows = []
         for window in self.windows:
             wopen = cv2.getWindowProperty(window.name, cv2.WND_PROP_VISIBLE) > 0
             open_windows.append(wopen)
+        return len(open_windows)
 
-        while any(open_windows):
+    # ------------------ Subclassed methods from ViewerBase ------------------
+
+    def _run(self):
+        """Loop to run live viewer"""
+        while True:
+
             self._update_info()
             self._update_images()
             self._check_external_stop()
-            if self.internal_stop.is_set():
-                for window in self.windows:
-                    cv2.destroyWindow(window.name)
+
+            if self._count_open_windows() < 1:
                 break
-            cv2.waitKey(int(self.dt_graph * 1000))
+
+            key = cv2.waitKey(int(self.dt_graph * 1000))
+
+            if self.internal_stop.is_set() or key in ESCAPE_KEYS:
+                cv2.destroyAllWindows()
+                break
 
     def stop(self):
         super().stop()
-        cv2.destroyAllWindows()
