@@ -202,6 +202,8 @@ class ImageRecord(Record):
         checked_modules=(),
         dt_graph=0.02,
         dirty_ok=True,
+        Window=None,
+        Viewer=None,
         **kwargs,
     ):
         """Initialize an ImageRecord object.
@@ -223,6 +225,14 @@ class ImageRecord(Record):
             If False, the recording cannot be started if Git repositories are
             not clean (uncommitted changes).
 
+        --- The attributes below are optional but need to be supplied if one
+        --- wants live view of images
+        --- (see examples in the `cameras` python package)
+        Window : Window object, optional
+            single window to view live images of one camera
+        Viewer : Viewer object, optional
+            object that manages one or more live windows
+
         **kwargs : dict, optional
             Additional keyword arguments inherited from Record:
             path : str, default="."
@@ -234,11 +244,6 @@ class ImageRecord(Record):
             dt_request : float, default=0.7
                 Time interval (in seconds) for checking user requests, such as
                 graph pop-ups.
-
-        Notes
-        -----
-        - For live views, it is necessary to define the Viewer and Window
-          attributes (see below).
         """
         super().__init__(recordings=recordings, **kwargs)
         self.metadata_filename = metadata_filename
@@ -249,6 +254,9 @@ class ImageRecord(Record):
 
         self.dirty_ok = dirty_ok
         self.get_image_recordings()
+
+        self.Window = Window
+        self.Viewer = Viewer
 
     def get_image_recordings(self):
         """Useful when combined with other recording types (e.g. vacuum)"""
@@ -288,22 +296,6 @@ class ImageRecord(Record):
         )
 
     # ====================== For live viewing of images ======================
-
-    @property
-    def Window(self):
-        """TO SUBCLASS -- Window object to view live images.
-
-        See examples in the `cameras` python package
-        """
-        pass
-
-    @property
-    def Viewer(self):
-        """TO SUBCLASS -- Viewer object to manage live windows
-
-        See examples in the `cameras` python package
-        """
-        pass
 
     def data_plot(self):
         """What to do when graph event is triggered"""
