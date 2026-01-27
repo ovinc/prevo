@@ -7,7 +7,7 @@ This package provides classes to rapidly create interactive data recording for v
 
 Sensors are read in an asynchronous fashion and can have different time intervals for data reading (or be continuous, i.e. as fast as possible). Synchronous recording is also possible (although not the main goal of this package) by defining a super-sensor object that reads all sensors (and which is itself probed at regular intervals).
 
-Tools for graphical visualizations of data during recording are also provided (updated numerical graphs, oscilloscope-like graphs, image viewers for cameras etc.)
+Tools for graphical visualizations of data during recording are also provided (updated numerical graphs, oscilloscope-like graphs, etc.)
 
 The package contains various modules:
 
@@ -16,8 +16,6 @@ The package contains various modules:
 - `prevo.control`: control device properties, create pre-defined temporal evolutions of settings for sensors, devices and recording properties,
 
 - `prevo.plot`: plot numerical data in real time (regular plots, oscilloscope-like graphs etc.),
-
-- `prevo.viewers`: live view of images from camera-like sensors,
 
 - `prevo.csv`: read / save data with CSV/TSV files
 
@@ -29,7 +27,7 @@ The package contains various modules:
 
 See Jupyter notebooks in `examples/` and docstrings for more help.
 
-Below are also minimal examples showing implementation of periodic recording and image viewers.
+Below are also minimal examples showing implementation of periodic recording.
 
 
 Install
@@ -147,29 +145,9 @@ A minimal example is provided below, to record pressure and temperature asynchro
 Many other options and customizations exist See docstrings for more help and `examples/Record.ipynb` for examples.
 
 
-Live image viewer
-=================
+# Record images from cameras
 
-Let's assume one gets image data in a queue from a camera.
-Individual elements from the `camera.queue` are dictionaries with keys `image` (numpy-like image array) and `num` (image number, an integer). This formatting of elements in the queue is assumed by default, but others are possible (see *examples/Viewers.ipynb*).
-
-It is possible to view the images using either `tkinter`, `opencv` or `matplotlib`. Here we will use tkinter.
-One first has to define a *window* in which to display the images, and then a *viewer* to operate and update the window.
-
-
-```python
-from prevo.viewers import TkWindow, TkViewer
-
-# The window will show the (display) fps and the image number in real time
-window = TkWindow(camera.queue, show_fps=True, show_num=True)
-
-# It is possible to run several windows in parallel from other image sources
-# Here we have just one.
-viewer = TkViewer(windows=(window,))
-viewer.start()
-```
-
-Here again, various options and customizations are possible, see some example in *examples/Viewers.ipynb*.
+See *Record_Images.ipynb*
 
 
 Misc. info
@@ -193,7 +171,6 @@ Module requirements
 ### Optional packages
 
 - pandas (optional, for csv loading methods)
-- opencv-python (optional, for specific camera viewers)
 
 
 Python requirements

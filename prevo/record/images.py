@@ -26,9 +26,6 @@ import prevo
 # Local imports
 from .general import RecordingBase, Record
 from ..csv import CsvFile
-from ..viewers import CvWindow, CvViewer
-from ..viewers import TkWindow, TkViewer
-from ..viewers import MplWindow, MplViewer
 from ..misc import increment_filename
 
 # Optional, nonstandard
@@ -36,19 +33,6 @@ try:
     from PIL import Image
 except ModuleNotFoundError:
     pass
-
-
-Windows = {
-    "cv": CvWindow,
-    "mpl": MplWindow,
-    "tk": TkWindow,
-}
-
-Viewers = {
-    "cv": CvViewer,
-    "mpl": MplViewer,
-    "tk": TkViewer,
-}
 
 
 class ImageRecording(RecordingBase):
@@ -217,7 +201,6 @@ class ImageRecord(Record):
         metadata_filename="Images_Metadata.json",
         checked_modules=(),
         dt_graph=0.02,
-        viewer="tk",
         dirty_ok=True,
         **kwargs,
     ):
@@ -251,15 +234,18 @@ class ImageRecord(Record):
             dt_request : float, default=0.7
                 Time interval (in seconds) for checking user requests, such as
                 graph pop-ups.
-        """
 
+        Notes
+        -----
+        - For live views, it is necessary to define the Viewer and Window
+          attributes (see below).
+        """
         super().__init__(recordings=recordings, **kwargs)
         self.metadata_filename = metadata_filename
         self.checked_modules = set((prevo,) + tuple(checked_modules))
 
         # Viewing options -------------
         self.dt_graph = dt_graph
-        self.viewer = viewer
 
         self.dirty_ok = dirty_ok
         self.get_image_recordings()
@@ -301,16 +287,31 @@ class ImageRecord(Record):
             nogit_warning=True,
         )
 
+    # ====================== For live viewing of images ======================
+
+    @property
+    def Window(self):
+        """TO SUBCLASS -- Window object to view live images.
+
+        See examples in the `cameras` python package
+        """
+        pass
+
+    @property
+    def Viewer(self):
+        """TO SUBCLASS -- Viewer object to manage live windows
+
+        See examples in the `cameras` python package
+        """
+        pass
+
     def data_plot(self):
         """What to do when graph event is triggered"""
-
-        Viewer = Viewers[self.viewer]
-        Window = Windows[self.viewer]
 
         windows = []
         for name, recording in self.image_recordings.items():
             image_queue = recording.queues["plotting"]
-            win = Window(
+            win = self.Window(
                 image_queue,
                 name=name,
                 show_num=True,
@@ -318,7 +319,7 @@ class ImageRecord(Record):
             )
             windows.append(win)
 
-        viewer = Viewer(
+        viewer = self.Viewer(
             windows,
             external_stop=self.internal_stop,
             dt_graph=self.dt_graph,
