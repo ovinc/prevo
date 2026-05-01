@@ -150,6 +150,25 @@ Many other options and customizations exist See docstrings for more help and `ex
 See *Record_Images.ipynb*
 
 
+---
+Control device properties
+==========================
+
+The `prevo.control` module allows you to control device properties (e.g., temperature of a bath, relative humidity of a RH generator) and create pre-defined temporal patterns (ramps, plateaus, cycles).
+
+### Key classes:
+- `Control`: Base class for managing settings (must be subclassed).
+- `PeriodicControl`: For controlling devices with periodic updates of their settings.
+- `RecordingControl`: For controlling `prevo.Recording` objects.
+
+### Pre-defined temporal patterns:
+- `Program`: Custom cycles with arbitrary ramps and plateaus.
+- `Stairs`: Cycles with constant plateaus.
+- `Teeth`: Plateaus separated by ramps of constant slope.
+
+See Jupyter notebook (`examples/Control.ipynb`) for examples.
+
+
 Misc. info
 ==========
 
