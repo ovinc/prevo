@@ -169,7 +169,7 @@ class Control:
 
     def program(
         self,
-        repeat=1,
+        repeat=0,
         **steps,
     ):
         """Convenience method to generate a program. see Program Class."""
@@ -182,7 +182,7 @@ class Control:
     def stairs(
         self,
         duration=None,
-        repeat=1,
+        repeat=0,
         **steps,
     ):
         """Convenience method to generate a stairs program. see Stairs Class."""
@@ -199,7 +199,7 @@ class Control:
         slope_unit='/min',
         plateau_duration=None,
         start='plateau',
-        repeat=1,
+        repeat=0,
         **steps,
     ):
         """Convenience method to generate a teeth program. see Teeth Class."""

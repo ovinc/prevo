@@ -292,11 +292,13 @@ class Program:
 class Stairs(Program):
     """Special program consisting in plateaus of temperature, of same duration."""
 
-    def __init__(self,
-                 control=None,
-                 duration=None,
-                 repeat=0,
-                 **steps):
+    def __init__(
+        self,
+        control=None,
+        duration=None,
+        repeat=0,
+        **steps,
+    ):
         """Specific program with a succession of constant setting plateaus.
 
         Parameters
